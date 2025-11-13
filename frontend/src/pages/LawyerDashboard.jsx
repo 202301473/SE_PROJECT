@@ -1,0 +1,251 @@
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "../api/axios";
+import toast from "react-hot-toast";
+import { useAuth } from "../context/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/Components/ui/Card";
+import { Button } from "@/Components/ui/Button";
+import { BadgeCheck, Clock, ShieldAlert } from "lucide-react";
+
+const statusColors = {
+  pending: "text-yellow-400",
+  approved: "text-green-400",
+  rejected: "text-red-400",
+};
+
+const formatDateTime = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString(undefined, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const LawyerDashboard = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [dashboard, setDashboard] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.role !== "lawyer") {
+      toast.error("This dashboard is only available to lawyer accounts.");
+      navigate("/");
+      return;
+    }
+
+    const loadDashboard = async () => {
+      try {
+        const response = await axios.get("api/auth/lawyer/dashboard/");
+        setDashboard(response.data);
+      } catch (err) {
+        console.error("Failed to load lawyer dashboard:", err);
+        setError(err.response?.data?.error || "Unable to load lawyer dashboard.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboard();
+  }, [user, navigate]);
+
+  const handleConnectionUpdate = async (requestId, status) => {
+    try {
+      const response = await axios.patch(`api/auth/lawyer/connections/${requestId}/`, { status });
+      toast.success(response.data?.message || "Connection updated.");
+      setDashboard((prev) => {
+        if (!prev) return prev;
+        const updatedConnections = prev.connections.map((connection) =>
+          connection.id === requestId ? response.data.request : connection
+        );
+        const summary = {
+          total_requests: updatedConnections.length,
+          pending_requests: updatedConnections.filter((c) => c.status === "pending").length,
+          accepted_requests: updatedConnections.filter((c) => c.status === "accepted").length,
+          declined_requests: updatedConnections.filter((c) => c.status === "declined").length,
+        };
+        return { ...prev, connections: updatedConnections, summary };
+      });
+    } catch (err) {
+      console.error("Failed to update connection request:", err);
+      toast.error(err.response?.data?.error || "Unable to update request.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto py-10 animate-fade-in">
+        <div className="text-center text-gray-400">Loading dashboard...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-10 animate-fade-in">
+        <div className="text-center text-red-400">{error}</div>
+      </div>
+    );
+  }
+
+  if (!dashboard) {
+    return null;
+  }
+
+  const { profile, connections, summary, user: lawyerUser } = dashboard;
+  const verificationStatus = lawyerUser?.lawyer_verification_status || profile?.verification_status || "pending";
+
+  return (
+    <div className="container mx-auto py-10 animate-fade-in space-y-8">
+      <Card className="bg-gray-800/40 border border-gray-700/50 backdrop-blur-sm">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <BadgeCheck className="w-10 h-10 text-blue-400" />
+            <div>
+              <CardTitle className="text-2xl text-white">Lawyer Verification</CardTitle>
+              <CardDescription className="text-gray-400">
+                Track the status of your professional account verification.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <p className={`text-lg font-semibold ${statusColors[verificationStatus] || "text-gray-300"}`}>
+                Status: {verificationStatus.toUpperCase()}
+              </p>
+              {profile?.verification_notes && (
+                <p className="text-sm text-gray-300 mt-2">Notes: {profile.verification_notes}</p>
+              )}
+            </div>
+            {verificationStatus === "pending" && (
+              <div className="flex items-center gap-2 text-yellow-300 text-sm">
+                <Clock className="w-4 h-4" />
+                Your verification is being reviewed. This usually takes 1-2 business days.
+              </div>
+            )}
+            {verificationStatus === "rejected" && (
+              <div className="flex items-center gap-2 text-red-300 text-sm">
+                <ShieldAlert className="w-4 h-4" />
+                Update your credentials or contact support for assistance.
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-gray-800/40 border border-gray-700/50">
+          <CardContent className="p-5">
+            <p className="text-gray-400 text-sm">Total Requests</p>
+            <p className="text-2xl font-bold text-white">{summary.total_requests}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gray-800/40 border border-gray-700/50">
+          <CardContent className="p-5">
+            <p className="text-gray-400 text-sm">Pending</p>
+            <p className="text-2xl font-bold text-yellow-300">{summary.pending_requests}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gray-800/40 border border-gray-700/50">
+          <CardContent className="p-5">
+            <p className="text-gray-400 text-sm">Accepted</p>
+            <p className="text-2xl font-bold text-green-300">{summary.accepted_requests}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gray-800/40 border border-gray-700/50">
+          <CardContent className="p-5">
+            <p className="text-gray-400 text-sm">Declined</p>
+            <p className="text-2xl font-bold text-red-300">{summary.declined_requests}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="bg-gray-800/40 border border-gray-700/50">
+        <CardHeader>
+          <CardTitle className="text-white text-xl">Connection Requests</CardTitle>
+          <CardDescription className="text-gray-400">
+            Respond to clients who want to connect with you.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {connections.length === 0 && (
+            <div className="text-center text-gray-400 py-6">No connection requests yet.</div>
+          )}
+          {connections.map((connection) => (
+            <div
+              key={connection.id}
+              className="border border-gray-700/50 rounded-lg p-4 bg-gray-900/30 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+            >
+              <div>
+                <p className="text-white font-semibold">
+                  {connection.client?.name || connection.client?.username || "Client"}
+                </p>
+                <p className="text-sm text-gray-400">
+                  Contact: {connection.preferred_contact_value || connection.client?.email || "Not provided"}
+                </p>
+                {connection.preferred_time && (
+                  <p className="text-sm text-gray-400 mt-1">
+                    Preferred time: {formatDateTime(connection.preferred_time)}
+                  </p>
+                )}
+                {connection.meeting_link && (
+                  <p className="text-sm text-blue-400 mt-1">
+                    Google Meet:{" "}
+                    <a
+                      href={connection.meeting_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-blue-300"
+                    >
+                      {connection.meeting_link}
+                    </a>
+                  </p>
+                )}
+                {connection.message && (
+                  <p className="text-sm text-gray-300 mt-2 whitespace-pre-wrap">
+                    “{connection.message}”
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-2">
+                  Status: <span className="uppercase">{connection.status}</span>
+                </p>
+              </div>
+              {connection.status === "pending" && (
+                <div className="flex gap-2">
+                  <Button
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => handleConnectionUpdate(connection.id, "accepted")}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-red-500/60 text-red-400 hover:bg-red-500/10"
+                    onClick={() => handleConnectionUpdate(connection.id, "declined")}
+                  >
+                    Decline
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default LawyerDashboard;
+

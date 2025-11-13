@@ -8,12 +8,25 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 from django.conf import settings
 from mongoengine import DoesNotExist
-from .models import User
+from .models import User, LawyerProfile, LawyerConnectionRequest
 import random
 import cloudinary
 import cloudinary.uploader
 
-from .serializers import RegisterSerializer, LoginSerializer, UserSerializer, GoogleAuthSerializer, VerifyOTPSerializer, ResendOTPSerializer, UserProfileSerializer
+from .serializers import (
+    RegisterSerializer,
+    LoginSerializer,
+    UserSerializer,
+    GoogleAuthSerializer,
+    VerifyOTPSerializer,
+    ResendOTPSerializer,
+    UserProfileSerializer,
+    LawyerProfileSerializer,
+    LawyerConnectionRequestSerializer,
+    LawyerConnectionStatusSerializer,
+)
+from datetime import datetime
+from uuid import uuid4
 from .otp_utils import create_and_send_otp, is_otp_valid, clear_otp
 
 def get_tokens_for_user(user):
@@ -33,12 +46,7 @@ def signup_view(request):
     """Register new user and send OTP for verification"""
     serializer = RegisterSerializer(data=request.data)
     if serializer.is_valid():
-        user = User.create_user(
-            email=serializer.validated_data['email'],
-            username=serializer.validated_data['username'],
-            name=serializer.validated_data['name'],
-            password=serializer.validated_data['password'],
-        )
+        user = serializer.save()
         # User is not verified yet, send OTP
         user.is_verified = False
         user.save()
@@ -51,12 +59,17 @@ def signup_view(request):
                 'error': 'Failed to send OTP. Please try again.'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        return Response({
+        response_payload = {
             'message': 'Registration successful. OTP sent to your email. Please verify to continue.',
             'email': user.email,
             'requires_verification': True,
-            'redirect': 'verify-otp'
-        }, status=status.HTTP_201_CREATED)
+            'redirect': 'verify-otp',
+            'role': user.role,
+            'lawyer_verification_status': user.lawyer_verification_status,
+        }
+        if user.role == 'lawyer':
+            response_payload['lawyer_message'] = 'Your lawyer profile is pending verification. Our team will review your credentials shortly.'
+        return Response(response_payload, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
@@ -351,3 +364,149 @@ def logout_view(request):
         return Response(status=status.HTTP_205_RESET_CONTENT)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def lawyer_list_view(request):
+    """List approved lawyers"""
+    profiles = LawyerProfile.objects(verification_status='approved')
+    serializer = LawyerProfileSerializer(profiles, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def lawyer_detail_view(request, lawyer_id):
+    """Retrieve lawyer detail"""
+    try:
+        user = User.objects(id=lawyer_id, role='lawyer').first()
+    except DoesNotExist:
+        user = None
+    if not user:
+        return Response({'error': 'Lawyer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    profile = LawyerProfile.objects(user=user).first()
+    if not profile:
+        return Response({'error': 'Lawyer profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = LawyerProfileSerializer(profile)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_with_lawyer_view(request, lawyer_id):
+    """Create a connection request with a lawyer"""
+    if str(request.user.id) == lawyer_id:
+        return Response({'error': 'You cannot connect with yourself.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        lawyer = User.objects(id=lawyer_id, role='lawyer').first()
+    except DoesNotExist:
+        lawyer = None
+
+    if not lawyer:
+        return Response({'error': 'Lawyer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    profile = LawyerProfile.objects(user=lawyer, verification_status='approved').first()
+    if not profile:
+        return Response({'error': 'Lawyer is not available for connections yet.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    existing_request = LawyerConnectionRequest.objects(
+        client=request.user, lawyer=lawyer, status='pending'
+    ).first()
+    if existing_request:
+        serializer = LawyerConnectionRequestSerializer(existing_request)
+        return Response({
+            'message': 'You already have a pending connection request with this lawyer.',
+            'request': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    message = request.data.get('message', '').strip()
+    preferred_method = request.data.get('preferred_contact_method', 'email')
+    preferred_value = request.data.get('preferred_contact_value', request.user.email)
+    preferred_time_str = request.data.get('preferred_time')
+    meeting_link = request.data.get('meeting_link')
+
+    preferred_time = None
+    if preferred_time_str:
+        try:
+            preferred_time = datetime.fromisoformat(preferred_time_str.replace('Z', '+00:00'))
+        except ValueError:
+            return Response({'error': 'Invalid preferred time format. Use ISO 8601 format.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not meeting_link:
+        meeting_link = f"https://meet.google.com/new?hs=224&authuser=0&advocai={uuid4().hex[:8]}"
+
+    connection_request = LawyerConnectionRequest.objects.create(
+        client=request.user,
+        lawyer=lawyer,
+        message=message,
+        preferred_contact_method=preferred_method,
+        preferred_contact_value=preferred_value,
+        preferred_time=preferred_time,
+        meeting_link=meeting_link,
+    )
+
+    serializer = LawyerConnectionRequestSerializer(connection_request)
+    return Response({
+        'message': 'Connection request submitted successfully.',
+        'request': serializer.data,
+        'meeting_link': meeting_link,
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def lawyer_dashboard_view(request):
+    """Return dashboard information for a lawyer"""
+    if not request.user.is_lawyer:
+        return Response({'error': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    profile = LawyerProfile.objects(user=request.user).first()
+    profile_data = LawyerProfileSerializer(profile).data if profile else None
+
+    connection_requests = LawyerConnectionRequest.objects(lawyer=request.user).order_by('-created_at')
+    connection_serializer = LawyerConnectionRequestSerializer(connection_requests, many=True)
+
+    summary = {
+        'total_requests': connection_requests.count(),
+        'pending_requests': connection_requests.filter(status='pending').count(),
+        'accepted_requests': connection_requests.filter(status='accepted').count(),
+        'declined_requests': connection_requests.filter(status='declined').count(),
+    }
+
+    return Response({
+        'profile': profile_data,
+        'user': UserSerializer(request.user).data,
+        'connections': connection_serializer.data,
+        'summary': summary,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def lawyer_connection_update_view(request, connection_id):
+    """Allow lawyer to update connection request status"""
+    if not request.user.is_lawyer:
+        return Response({'error': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    connection_request = LawyerConnectionRequest.objects(id=connection_id, lawyer=request.user).first()
+    if not connection_request:
+        return Response({'error': 'Connection request not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = LawyerConnectionStatusSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    new_status = serializer.validated_data['status']
+    connection_request.status = new_status
+    connection_request.message = serializer.validated_data.get('message', connection_request.message)
+    connection_request.save()
+
+    response_serializer = LawyerConnectionRequestSerializer(connection_request)
+    return Response({
+        'message': f'Connection request {new_status}.',
+        'request': response_serializer.data,
+    }, status=status.HTTP_200_OK)

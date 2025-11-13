@@ -1,4 +1,14 @@
-from mongoengine import Document, StringField, BooleanField, DateTimeField, EmailField
+from mongoengine import (
+    Document,
+    StringField,
+    BooleanField,
+    DateTimeField,
+    EmailField,
+    ReferenceField,
+    ListField,
+    IntField,
+    CASCADE,
+)
 from django.contrib.auth.hashers import make_password, check_password
 from django.utils import timezone
 from datetime import datetime
@@ -13,12 +23,17 @@ class User(Document):
     profile_picture = StringField(max_length=255, default='')
     cover_photo = StringField(max_length=255, default='') # Added cover photo field
     password = StringField(required=True)
+    phone = StringField(max_length=20, default='')
     
     # Authentication fields
     is_active = BooleanField(default=True)
     is_staff = BooleanField(default=False)
     is_superuser = BooleanField(default=False)
     is_verified = BooleanField(default=False)  # Email verification status
+    role = StringField(max_length=32, default='client', choices=('client', 'lawyer', 'admin'))
+    is_lawyer_verified = BooleanField(default=False)
+    lawyer_verification_status = StringField(max_length=32, default='not_submitted')  # pending, approved, rejected
+    lawyer_verified_at = DateTimeField()
     
     # OAuth fields
     google_id = StringField(max_length=255, unique=True, sparse=True)
@@ -67,6 +82,10 @@ class User(Document):
     def is_anonymous(self):
         """Always return False for authenticated users"""
         return False
+
+    @property
+    def is_lawyer(self):
+        return self.role == 'lawyer'
     
     def save(self, *args, **kwargs):
         """Override save to handle password hashing"""
@@ -107,3 +126,72 @@ class User(Document):
             raise ValueError('Superuser must have is_superuser=True.')
         
         return cls.create_user(email, username, password, **extra_fields)
+
+
+class LawyerProfile(Document):
+    """Extended profile information for lawyers"""
+
+    user = ReferenceField(User, required=True, unique=True, reverse_delete_rule=CASCADE)
+    phone = StringField(max_length=20, default='')
+    education = StringField(max_length=255, default='')
+    experience_years = IntField(default=0)
+    law_firm = StringField(max_length=255, default='')
+    specializations = ListField(StringField(max_length=120), default=list)
+    license_number = StringField(max_length=120, required=True)
+    bar_council_id = StringField(max_length=120, required=True)
+    consultation_fee = StringField(max_length=120, default='')
+    bio = StringField(default='')
+    verification_documents = ListField(StringField(max_length=512), default=list)
+    verification_status = StringField(
+        max_length=32,
+        default='pending',
+        choices=('pending', 'approved', 'rejected'),
+    )
+    verification_notes = StringField(default='')
+    verified_at = DateTimeField()
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    meta = {
+        'collection': 'lawyer_profiles',
+        'indexes': [
+            'verification_status',
+            {'fields': ['user'], 'unique': True},
+        ],
+    }
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.utcnow()
+        return super().save(*args, **kwargs)
+
+
+class LawyerConnectionRequest(Document):
+    """Connection requests between clients and lawyers"""
+
+    client = ReferenceField(User, required=True, reverse_delete_rule=CASCADE)
+    lawyer = ReferenceField(User, required=True, reverse_delete_rule=CASCADE)
+    message = StringField(default='')
+    status = StringField(
+        max_length=32,
+        default='pending',
+        choices=('pending', 'accepted', 'declined'),
+    )
+    preferred_contact_method = StringField(max_length=32, default='email')
+    preferred_contact_value = StringField(max_length=255, default='')
+    preferred_time = DateTimeField(required=False, null=True)
+    meeting_link = StringField(max_length=512, default='')
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    meta = {
+        'collection': 'lawyer_connection_requests',
+        'indexes': [
+            {'fields': ['client', 'lawyer', 'status']},
+            'lawyer',
+            'client',
+        ],
+    }
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.utcnow()
+        return super().save(*args, **kwargs)

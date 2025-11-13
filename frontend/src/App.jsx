@@ -11,6 +11,7 @@ import VerifyOtp from "./pages/VerifyOtp"; // Added this import
 
 import LawyerProfile from "./pages/LawyerProfile";
 import Lawyers from "./pages/Lawyers";
+import LawyerDashboard from "./pages/LawyerDashboard";
 import DocumentAnalyzer from "./pages/DocumentAnalyzer";
 import LawyerConnect from "./pages/LawyerConnect";
 import MyDocuments from "./pages/MyDocuments";
@@ -105,6 +106,14 @@ function AppContent() {
             element={(
               <ProtectedRoute>
                 <Lawyers />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/lawyer-dashboard"
+            element={(
+              <ProtectedRoute>
+                <LawyerDashboard />
               </ProtectedRoute>
             )}
           />

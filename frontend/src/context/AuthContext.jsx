@@ -42,14 +42,22 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const response = await axios.post('/api/auth/login/', { email, password });
-      const { access, refresh, user: userData } = response.data.tokens; // Assuming tokens are nested under 'tokens'
-      
+      const { tokens, user: userData, redirect } = response.data;
+      const { access, refresh } = tokens;
+
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
       setUser(userData);
       setIsAuthenticated(true);
       toast.success('Login successful!');
-      navigate('/'); // Redirect to home or dashboard
+
+      if (userData?.role === 'lawyer' && userData?.lawyer_verification_status !== 'approved') {
+        navigate('/lawyer-dashboard');
+      } else if (redirect) {
+        navigate(`/${redirect === 'home' ? '' : redirect}`);
+      } else {
+        navigate('/');
+      }
       return true;
     } catch (error) {
       console.error('Login failed:', error);
