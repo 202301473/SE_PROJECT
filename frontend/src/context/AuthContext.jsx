@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
       if (accessToken) {
         try {
           // Validate token and fetch user profile
-          const response = await axios.get('auth/profile/', {
+          const response = await axios.get('/api/auth/profile/', {
             headers: {
               Authorization: `Bearer ${accessToken}`
             }
@@ -41,7 +41,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     setLoading(true);
     try {
-      const response = await axios.post('auth/login/', { email, password });
+      const response = await axios.post('/api/auth/login/', { email, password });
       const { access, refresh, user: userData } = response.data.tokens; // Assuming tokens are nested under 'tokens'
       
       localStorage.setItem('access_token', access);
@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
-        await axios.post('auth/logout/', { refresh: refreshToken });
+        await axios.post('/api/auth/logout/', { refresh: refreshToken });
       }
     } catch (error) {
       console.error('Logout failed:', error);
@@ -88,4 +88,5 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

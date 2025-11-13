@@ -1,118 +1,75 @@
-import React, { useState, useRef, useEffect } from 'react';
+
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { FileText, PenTool, Send, Download, User, Bot, Save, Edit, Eye, Bold, Italic, Strikethrough, Code, Pilcrow, Heading1, Heading2, Heading3, Indent as IndentIcon, Outdent as OutdentIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify, Underline as UnderlineIcon, Minus as HorizontalRuleIcon } from 'lucide-react';
+import { FileText, PenTool, Send, Download, User, Bot, Save, Edit, Eye, Bold, Italic, Strikethrough, Code, Pilcrow, Heading1, Heading2, Heading3, Indent as IndentIcon, Outdent as OutdentIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify, Underline as UnderlineIcon, MessageCircle, History, FileCheck, Minus, Menu, X, XCircle, Maximize, Share2 } from 'lucide-react'; // Added Maximize, Share2
 import axios from '../api/axios';
 import { saveAs } from 'file-saver';
 import '../styles/MarkdownPreview.css';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
+import { Button } from "@/Components/ui/Button";
+import { Input } from "@/Components/ui/Input";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/Components/ui/Card";
 
 import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
+import StarterKit from '@tiptap/starter-kit'; // Corrected import
 import { Markdown } from 'tiptap-markdown';
 import { Indent } from '../lib/tiptap-extensions/indent';
 import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
-
 import Image from '@tiptap/extension-image';
-
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import CommentList from '../Components/Comments/CommentList';
 const MenuBar = ({ editor }) => {
   if (!editor) {
     return null;
   }
 
+  const ToolButton = ({ onClick, isActive, disabled, title, icon: Icon }) => (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`p-2 rounded-lg transition-all duration-200 ${
+        isActive 
+          ? 'bg-gradient-to-r from-primary to-secondary text-foreground shadow-lg scale-105' 
+          : 'text-muted-foreground hover:bg-foreground/10 hover:text-foreground hover:scale-105'
+      } disabled:opacity-40 disabled:cursor-not-allowed`}
+      title={title}
+    >
+      <Icon className="w-4 h-4" />
+    </button>
+  );
+
+  const Divider = () => <div className="w-px h-6 bg-border/10 mx-1"></div>;
+
   return (
-    <div className="flex items-center space-x-1 p-2 bg-gray-100 rounded-t-lg border-b border-gray-300">
-      <button
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        disabled={!editor.can().chain().focus().toggleBold().run()}
-        className={editor.isActive('bold') ? 'is-active' : ''}
-        title="Bold (Ctrl+B)"
-      >
-        <Bold className="w-4 h-4" />
-      </button>
-      <button
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        disabled={!editor.can().chain().focus().toggleItalic().run()}
-        className={editor.isActive('italic') ? 'is-active' : ''}
-        title="Italic (Ctrl+I)"
-      >
-        <Italic className="w-4 h-4" />
-      </button>
-      <button
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
-        disabled={!editor.can().chain().focus().toggleUnderline().run()}
-        className={editor.isActive('underline') ? 'is-active' : ''}
-        title="Underline (Ctrl+U)"
-      >
-        <UnderlineIcon className="w-4 h-4" />
-      </button>
-      <button
-        onClick={() => editor.chain().focus().toggleStrike().run()}
-        disabled={!editor.can().chain().focus().toggleStrike().run()}
-        className={editor.isActive('strike') ? 'is-active' : ''}
-        title="Strikethrough (Ctrl+Shift+X)"
-      >
-        <Strikethrough className="w-4 h-4" />
-      </button>
-      <div className="w-px h-5 bg-gray-300 mx-2"></div>
-      <button
-        onClick={() => editor.chain().focus().setParagraph().run()}
-        className={editor.isActive('paragraph') ? 'is-active' : ''}
-        title="Paragraph (Ctrl+Shift+0)"
-      >
-        <Pilcrow className="w-4 h-4" />
-      </button>
-      <button
-        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-        className={editor.isActive('heading', { level: 1 }) ? 'is-active' : ''}
-        title="Heading 1 (Ctrl+Alt+1)"
-      >
-        <Heading1 className="w-4 h-4" />
-      </button>
-      <button
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        className={editor.isActive('heading', { level: 2 }) ? 'is-active' : ''}
-        title="Heading 2 (Ctrl+Alt+2)"
-      >
-        <Heading2 className="w-4 h-4" />
-      </button>
-      <button
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        className={editor.isActive('heading', { level: 3 }) ? 'is-active' : ''}
-        title="Heading 3 (Ctrl+Alt+3)"
-      >
-        <Heading3 className="w-4 h-4" />
-      </button>
-      <button onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal Rule">
-        <HorizontalRuleIcon className="w-4 h-4" />
-      </button>
-      <div className="w-px h-5 bg-gray-300 mx-2"></div>
-      <button onClick={() => editor.commands.indent()} title="Indent Paragraph">
-        <IndentIcon className="w-4 h-4" />
-      </button>
-      <button onClick={() => editor.commands.outdent()} title="Outdent Paragraph">
-        <OutdentIcon className="w-4 h-4" />
-      </button>
-      <div className="w-px h-5 bg-gray-300 mx-2"></div>
-      <button onClick={() => editor.chain().focus().setTextAlign('left').run()} className={editor.isActive({ textAlign: 'left' }) ? 'is-active' : ''} title="Align Left">
-        <AlignLeft className="w-4 h-4" />
-      </button>
-      <button onClick={() => editor.chain().focus().setTextAlign('center').run()} className={editor.isActive({ textAlign: 'center' }) ? 'is-active' : ''} title="Align Center">
-        <AlignCenter className="w-4 h-4" />
-      </button>
-      <button onClick={() => editor.chain().focus().setTextAlign('right').run()} className={editor.isActive({ textAlign: 'right' }) ? 'is-active' : ''} title="Align Right">
-        <AlignRight className="w-4 h-4" />
-      </button>
-      <button onClick={() => editor.chain().focus().setTextAlign('justify').run()} className={editor.isActive({ textAlign: 'justify' }) ? 'is-active' : ''} title="Align Justify">
-        <AlignJustify className="w-4 h-4" />
-      </button>
+    <div className="flex items-center gap-1 p-3 bg-gradient-to-r from-card to-card border-b border-border/10 rounded-t-xl backdrop-blur-xl flex-wrap">
+      <ToolButton onClick={() => editor.chain().focus().toggleBold().run()} disabled={!editor.can().chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} title="Bold (Ctrl+B)" icon={Bold} />
+      <ToolButton onClick={() => editor.chain().focus().toggleItalic().run()} disabled={!editor.can().chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} title="Italic (Ctrl+I)" icon={Italic} />
+      <ToolButton onClick={() => editor.chain().focus().toggleUnderline().run()} disabled={!editor.can().chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} title="Underline (Ctrl+U)" icon={UnderlineIcon} />
+      <ToolButton onClick={() => editor.chain().focus().toggleStrike().run()} disabled={!editor.can().chain().focus().toggleStrike().run()} isActive={editor.isActive('strike')} title="Strikethrough" icon={Strikethrough} />
+      <Divider />
+      <ToolButton onClick={() => editor.chain().focus().setParagraph().run()} isActive={editor.isActive('paragraph')} title="Paragraph" icon={Pilcrow} />
+      <ToolButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} isActive={editor.isActive('heading', { level: 1 })} title="Heading 1" icon={Heading1} />
+      <ToolButton onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} isActive={editor.isActive('heading', { level: 2 })} title="Heading 2" icon={Heading2} />
+      <ToolButton onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} isActive={editor.isActive('heading', { level: 3 })} title="Heading 3" icon={Heading3} />
+      <ToolButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal Rule" icon={Minus} />
+      <Divider />
+      <ToolButton onClick={() => editor.commands.indent()} title="Indent" icon={IndentIcon} />
+      <ToolButton onClick={() => editor.commands.outdent()} title="Outdent" icon={OutdentIcon} />
+      <Divider />
+      <ToolButton onClick={() => editor.chain().focus().setTextAlign('left').run()} isActive={editor.isActive({ textAlign: 'left' })} title="Align Left" icon={AlignLeft} />
+      <ToolButton onClick={() => editor.chain().focus().setTextAlign('center').run()} isActive={editor.isActive({ textAlign: 'center' })} title="Align Center" icon={AlignCenter} />
+      <ToolButton onClick={() => editor.chain().focus().setTextAlign('right').run()} isActive={editor.isActive({ textAlign: 'right' })} title="Align Right" icon={AlignRight} />
+      <ToolButton onClick={() => editor.chain().focus().setTextAlign('justify').run()} isActive={editor.isActive({ textAlign: 'justify' })} title="Align Justify" icon={AlignJustify} />
     </div>
   );
 };
 
+import VersionsSidebar from '../Components/VersionsSidebar';
+
+
 const DocumentCreation = () => {
-  const { id: mongoConversationId } = useParams(); // This is the MongoDB conversation ID
+  const { id: mongoConversationId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -122,81 +79,238 @@ const DocumentCreation = () => {
   const [title, setTitle] = useState('');
   const [chatMessage, setChatMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [finalDocument, setFinalDocument] = useState(''); // Now stores HTML
+  const [finalDocument, setFinalDocument] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const fileInputRef = useRef(null);
-  const [signatureRole, setSignatureRole] = useState(null); // 'landlord' | 'tenant'
+  const [signatureRole, setSignatureRole] = useState(null);
   const chatContainerRef = useRef(null);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
+  const [lastSaved, setLastSaved] = useState(null);
+  const [isVersionsSidebarOpen, setIsVersionsSidebarOpen] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState(null);
+  const [originalDocumentContent, setOriginalDocumentContent] = useState(''); // New state to track original content
+  const [isTitleEditing, setIsTitleEditing] = useState(false); // New state for title editing
+  const [tempTitle, setTempTitle] = useState(''); // New state for temporary title during editing
+  const [commentsSidebarOpen, setCommentsSidebarOpen] = useState(false); // State for comments sidebar
 
-  const editor = useEditor({
-    extensions: [StarterKit, Markdown, Image.configure({ inline: true }), Indent, TextAlign.configure({ types: ['heading', 'paragraph'] }), Underline],
-    content: finalDocument,
-    onUpdate: ({ editor }) => {
-      setFinalDocument(editor.getHTML());
-    },
-    editorProps: {
-      attributes: {
-        class: 'markdown-preview',
-      },
-    },
-  });
+  const documentRef = useRef(null); // Ref for the document area
+  const [isFullScreen, setIsFullScreen] = useState(false); // State for full screen mode
 
-  const fetchConversation = async (idToFetch) => {
-    console.log("[DEBUG Frontend] fetchConversation called with ID:", idToFetch);
-    if (idToFetch) {
-      try {
-        const convResponse = await axios.get(`documents/conversations/${idToFetch}/`);
-        const conversation = convResponse.data;
-        console.log("[DEBUG Frontend] Fetched conversation messages:", conversation.messages);
-        setTitle(conversation.title || '');
-        setMessages(conversation.messages || []);
-        
-        if (conversation.document_versions && conversation.document_versions.length > 0) {
-          let contentToLoad = '';
-          if (versionToLoad) {
-            const specificVersion = conversation.document_versions.find(v => v.version_number === parseInt(versionToLoad));
-            if (specificVersion) {
-              contentToLoad = specificVersion.content;
-            } else {
-              toast.error(`Version ${versionToLoad} not found.`);
-              contentToLoad = conversation.document_versions[conversation.document_versions.length - 1].content; // Fallback to latest
-            }
-          } else {
-            contentToLoad = conversation.document_versions[conversation.document_versions.length - 1].content; // Default to latest
-          }
-          setFinalDocument(contentToLoad);
-        } else {
-          setFinalDocument(''); // Clear document if no versions
-        }
-      } catch (error) {
-        console.error('Error fetching conversation:', error);
-        toast.error('Could not load conversation.');
-      }
+  const toggleFullScreen = () => {
+    if (!documentRef.current) return;
+
+    if (!document.fullscreenElement) {
+      documentRef.current.requestFullscreen().then(() => {
+        setIsFullScreen(true);
+      }).catch(err => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+      });
     } else {
-      // Reset state for new document creation
-      console.log("[DEBUG Frontend] Resetting state for new document creation.");
-      setTitle('');
-      setMessages([]);
-      setFinalDocument('');
+      document.exitFullscreen().then(() => {
+        setIsFullScreen(false);
+      }).catch(err => {
+        console.error(`Error attempting to exit full-screen mode: ${err.message} (${err.name})`);
+      });
     }
   };
 
   useEffect(() => {
-    if (editor && finalDocument !== editor.getHTML()) {
-      // AI provides markdown, so we set it as such. onUpdate will convert it to HTML.
-      editor.chain().setContent(finalDocument, false).setMeta('addToHistory', false).run();
-    }
-  }, [finalDocument, editor]);
+    const handleFullScreenChange = () => {
+      setIsFullScreen(!!document.fullscreenElement);
+    };
 
-  useEffect(() => {
-    fetchConversation(mongoConversationId);
-  }, [mongoConversationId, versionToLoad]); // Re-fetch when ID or version changes
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
+    };
+  }, []);
+
+  const handleShareDocument = async () => {
+    let shareUrl = '';
+    if (mongoConversationId) {
+      shareUrl = `${window.location.origin}/documentShare/${mongoConversationId}`;
+    } else {
+      // If no mongoConversationId, it's a new document, generate a temporary share link via API
+      if (!finalDocument.trim()) {
+        toast.error('Please add some content to the document before generating a share link.');
+        return;
+      }
+      try {
+        const response = await axios.post('api/documents/generate-share-link/', {
+          document_content: finalDocument,
+          title: title || 'Shared Document',
+        });
+        shareUrl = `${window.location.origin}${response.data.share_url}`;
+      } catch (error) {
+        console.error('Error generating share link:', error.response ? error.response.data : error.message);
+        toast.error(`Failed to generate share link: ${error.response?.data?.error || error.message}`);
+        return;
+      }
+    }
+    
+    if (shareUrl) {
+      navigator.clipboard.writeText(shareUrl);
+      toast.success('Document share link copied to clipboard!');
+    }
+  };
 
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    handleResize(); 
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Markdown,
+      Image.configure({ inline: true }),
+      Indent,
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Underline,
+    ],
+    content: finalDocument,
+    onUpdate: ({ editor }) => {
+      setFinalDocument(editor.getHTML());
+    },
+    editorProps: {
+      attributes: {
+        class: 'markdown-preview p-8 bg-card/60 border border-border/10 rounded-b-2xl backdrop-blur-xl text-foreground overflow-hidden',
+      },
+    },
+  });
+
+  const fetchConversation = useCallback(async (idToFetch) => {
+    if (idToFetch) {
+      try {
+        const convResponse = await axios.get(`/api/documents/conversations/${idToFetch}/`);
+        const conversation = convResponse.data;
+        setTitle(conversation.title || '');
+        setMessages(conversation.messages || []);
+        
+        if (conversation.document_versions && conversation.document_versions.length > 0) {
+          let contentToLoad = '';
+          let versionToSet = null;
+          if (versionToLoad) {
+            const specificVersion = conversation.document_versions.find(v => v.version_number === parseInt(versionToLoad));
+            if (specificVersion) {
+              contentToLoad = specificVersion.content;
+              versionToSet = specificVersion.version_number;
+            } else {
+              toast.error(`Version ${versionToLoad} not found.`);
+              const latestVersion = conversation.document_versions[conversation.document_versions.length - 1];
+              contentToLoad = latestVersion.content;
+              versionToSet = latestVersion.version_number;
+            }
+          } else {
+            const latestVersion = conversation.document_versions[conversation.document_versions.length - 1];
+            contentToLoad = latestVersion.content;
+            versionToSet = latestVersion.version_number;
+          }
+          setFinalDocument(contentToLoad);
+          setCurrentVersion(versionToSet);
+          setOriginalDocumentContent(contentToLoad); // Set original content here
+        } else {
+          setFinalDocument('');
+          setCurrentVersion(null);
+          setOriginalDocumentContent(''); // Set original content here
+        }
+      } catch (error) {
+        console.error('Error fetching conversation:', error);
+        if (error.response && error.response.status === 404) {
+          toast.error('Document not found. Redirecting to My Documents.');
+          navigate('/my-documents'); // Navigate to a safe page
+        } else {
+          toast.error('Could not load conversation.');
+        }
+      }
+    } else {
+      setTitle('');
+      setMessages([]);
+      setFinalDocument('');
+      setCurrentVersion(null);
+      setOriginalDocumentContent(''); // Set original content here
+    }
+  }, [versionToLoad, navigate]); // Add navigate to dependency array
+
+  const handleSelectVersion = async (versionNumber) => {
+    try {
+      const response = await axios.get(`/api/documents/conversations/${mongoConversationId}/`);
+      const conversation = response.data;
+      const specificVersion = conversation.document_versions.find(v => v.version_number === versionNumber);
+      if (specificVersion) {
+        setFinalDocument(specificVersion.content);
+        setCurrentVersion(versionNumber);
+        toast.success(`Loaded version ${versionNumber}`);
+        setIsVersionsSidebarOpen(false);
+      } else {
+        toast.error(`Version ${versionNumber} not found.`);
+      }
+    } catch (error) {
+      console.error('Error fetching version:', error);
+      toast.error('Could not load version.');
+    }
+  };
+
+  useEffect(() => {
+    if (editor && finalDocument !== editor.getHTML()) {
+      editor.chain().setContent(finalDocument, false).setMeta('addToHistory', false).run();
+    }
+  }, [finalDocument, editor]);
+
+  useEffect(() => {
+    fetchConversation(mongoConversationId);
+  }, [mongoConversationId, versionToLoad, fetchConversation]);
+
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleEditTitleClick = () => {
+    setIsTitleEditing(true);
+    setTempTitle(title); // Initialize tempTitle with current title
+  };
+
+  const handleSaveTitle = async () => {
+    if (!tempTitle.trim()) {
+      toast.error('Document title cannot be empty.');
+      return;
+    }
+    if (tempTitle === title) {
+      setIsTitleEditing(false);
+      return;
+    }
+    try {
+      await axios.put(`api/documents/conversations/${mongoConversationId}/`, { title: tempTitle });
+      setTitle(tempTitle); // Update main title state
+      toast.success('Document title updated!');
+      setIsTitleEditing(false);
+    } catch (err) {
+      console.error('Error updating document title:', err);
+      toast.error('Failed to update document title.');
+    }
+  };
+
+  const handleCancelTitleEdit = () => {
+    setIsTitleEditing(false);
+    setTempTitle(''); // Clear temp title
+  };
 
   const handleSendMessage = async () => {
     if (!chatMessage.trim() || !editor) return;
@@ -208,7 +322,6 @@ const DocumentCreation = () => {
 
     let payloadMessages = [...messages, userMessage];
 
-    // If a document exists, get its markdown version for the AI context
     if (editor.getText()) {
       const markdownContext = editor.storage.markdown.getMarkdown();
       payloadMessages = [
@@ -219,12 +332,17 @@ const DocumentCreation = () => {
     }
 
     try {
-      const response = await axios.post('ai-generator/chat/', { messages: payloadMessages });
+      const response = await axios.post('api/ai-generator/chat/', { messages: payloadMessages });
       const aiResponse = response.data;
+      console.log('AI Response:', aiResponse); // Debugging line
       
       if (aiResponse.type === 'document') {
-        const documentMarkdown = aiResponse.text;
-        // Set the new markdown content in the editor. The onUpdate handler will convert and save it to HTML.
+        console.log('Raw aiResponse.text:', aiResponse.text); // New debugging line
+        console.log('Type of aiResponse.text:', typeof aiResponse.text); // New debugging line
+        let documentMarkdown = aiResponse.text;
+        // Escape backslashes to prevent "Invalid \escape" errors
+        documentMarkdown = documentMarkdown.replace(/\\/g, '\\\\');
+        console.log('Document Markdown from AI (after escaping):', documentMarkdown); // Debugging line
         editor.chain().setContent(documentMarkdown).selectAll().indent().run();
 
         const newBotMessages = [
@@ -232,11 +350,9 @@ const DocumentCreation = () => {
           { sender: 'bot', type: 'display', text: "I have updated the document for you. You can review the changes and ask for more updates if needed." }
         ];
         setMessages(prev => [...prev, ...newBotMessages]);
-
       } else {
         setMessages(prev => [...prev, { sender: 'bot', type: 'display', text: aiResponse.text }]);
       }
-
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage = error.response?.data?.error || 'An error occurred. Please try again.';
@@ -252,40 +368,71 @@ const DocumentCreation = () => {
       return;
     }
 
-    // Payload for the conversation history + new version content
+    if (finalDocument === originalDocumentContent && mongoConversationId) {
+      toast('No changes made to save.', { icon: 'ℹ️' });
+      return;
+    }
+
     const conversationPayload = {
       title: title,
-      messages: messages, // <--- Debug: Check this value
-      new_document_content: finalDocument // Send new document content to be saved as a new version
+      messages: messages,
+      new_document_content: finalDocument
     };
-    console.log("[DEBUG Frontend] handleSaveConversation - messages being sent:", conversationPayload.messages);
 
     try {
-      let idToUseForFetch = mongoConversationId; // Use the ID from params initially
+      let idToUseForFetch = mongoConversationId;
 
-      if (!mongoConversationId) { // If it's a new document
-        const convResponse = await axios.post('documents/conversations/', { 
-            title: title, 
-            messages: messages, // Send the actual messages state
-            initial_document_content: finalDocument 
-        });
-        idToUseForFetch = convResponse.data.id; // Get the new ID
-        // Update the URL in the browser without causing a full re-render that loses state
-        // This will also cause mongoConversationId from useParams to update eventually
+      if (!mongoConversationId) {
+                const convResponse = await axios.post('/api/documents/conversations/', {
+                    title: title,
+                    messages: messages,
+                    initial_document_content: finalDocument
+                });        idToUseForFetch = convResponse.data.id;
         navigate(`/document-creation/${idToUseForFetch}`, { replace: true });
         toast.success('New Document created and saved as Version 0!');
-      } else { // If updating an existing document
-        await axios.put(`documents/conversations/${mongoConversationId}/`, conversationPayload);
+      } else {
+        await axios.put(`/api/documents/conversations/${mongoConversationId}/`, conversationPayload);
         toast.success('Document updated and new version saved!');
       }
-      // Explicitly fetch the conversation using the *correct* ID
-      // This ensures the component's state is updated with the latest data from the DB
-      // including the newly saved version and messages.
       await fetchConversation(idToUseForFetch);
-
+      setLastSaved(new Date());
+      setOriginalDocumentContent(finalDocument); // Update original content after successful save
     } catch (error) {
       console.error('Error saving document/conversation:', error);
       toast.error(`Failed to save document or conversation: ${error.message}`);
+    }
+  };
+
+  const handleDeleteVersion = async (convId, versionNumber) => {
+    if (!convId || !versionNumber) {
+      toast.error('Missing conversation ID or version number for deletion.');
+      return;
+    }
+
+    try {
+      // Fetch conversation to check version count
+      const convResponse = await axios.get(`/api/documents/conversations/${convId}/`);
+      const conversation = convResponse.data;
+
+      if (conversation.document_versions && conversation.document_versions.length === 1) {
+        const onlyVersion = conversation.document_versions[0];
+        if (onlyVersion.version_number === versionNumber) {
+          const confirmDelete = window.confirm(
+            'This is the only version of the document. Deleting it will delete the entire document. Are you sure you want to proceed?'
+          );
+          if (!confirmDelete) {
+            toast('Deletion cancelled.', { icon: 'ℹ️' });
+            return;
+          }
+        }
+      }
+
+      await axios.delete(`/api/documents/conversations/${convId}/versions/${versionNumber}/`);
+      toast.success(`Version ${versionNumber} deleted successfully!`);
+      await fetchConversation(convId); // Re-fetch conversation to update versions list
+    } catch (error) {
+      console.error('Error deleting version:', error);
+      toast.error(error.response?.data?.error || 'Failed to delete version.');
     }
   };
 
@@ -295,7 +442,7 @@ const DocumentCreation = () => {
       return;
     }
     try {
-      const response = await axios.get(`utils/conversations/${mongoConversationId}/download-latest-pdf/`, {
+      const response = await axios.get(`api/utils/conversations/${mongoConversationId}/download-latest-pdf/`, {
         responseType: 'blob',
       });
       saveAs(response.data, `${title || 'legal_document'}.pdf`);
@@ -320,7 +467,7 @@ const DocumentCreation = () => {
     try {
       const form = new FormData();
       form.append('signature', file);
-      const res = await axios.post('utils/upload-signature/', form, {
+      const res = await axios.post('api/utils/upload-signature/', form, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       const url = res.data?.url;
@@ -349,7 +496,7 @@ Preserve all existing content and headings. Return the entire updated document i
       payloadMessages.push({ sender: 'user', text: instruction });
 
       setIsGenerating(true);
-      const chatRes = await axios.post('ai-generator/chat/', { messages: payloadMessages });
+      const chatRes = await axios.post('api/ai-generator/chat/', { messages: payloadMessages });
       const aiResponse = chatRes.data;
       if (aiResponse.type === 'document') {
         const documentMarkdown = aiResponse.text;
@@ -382,134 +529,465 @@ Preserve all existing content and headings. Return the entire updated document i
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 text-center">
-          <div className="flex items-center justify-center mb-4">
-            <FileText className="w-10 h-10 text-blue-600 mr-3" />
-            <h1 className="text-4xl font-bold text-gray-900">{mongoConversationId ? 'Edit Document' : 'Create New Document'}</h1>
-          </div>
-          <p className="text-xl text-gray-600">
-            {mongoConversationId ? 'Continue editing your document' : 'Build your legal document from scratch with our AI assistant.'}
-          </p>
+  const hasDocument = !!finalDocument;
+
+  // Initial view when no document
+  if (!hasDocument) {
+    return (
+      <div className="flex relative h-screen bg-background overflow-hidden">
+        <div className="fixed inset-0 opacity-30 pointer-events-none">
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary rounded-full mix-blend-multiply filter blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary rounded-full mix-blend-multiply filter blur-3xl animate-pulse delay-1000"></div>
         </div>
 
-        {/* Save Conversation Section */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 flex items-center space-x-4">
-            <input 
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter document title..."
-                className="flex-1 px-6 py-4 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-600 outline-none"
-            />
-            <button
-                onClick={handleSaveConversation}
-                className="px-6 py-4 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors flex items-center space-x-2"
-            >
-                <Save className="w-5 h-5" />
-                <span>{mongoConversationId ? 'Save New Version' : 'Create & Save'}</span>
-            </button>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          <div ref={chatContainerRef} className="h-96 overflow-y-auto mb-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
-            {messages.filter(msg => msg.type !== 'document_context').map((msg, index) => (
-              <div key={index} className={`flex items-start gap-3 my-4 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-                {msg.sender === 'bot' && <Bot className="w-6 h-6 text-blue-600 flex-shrink-0" />}
-                <div className={`p-3 rounded-lg max-w-lg ${msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800'}`}>
-                  <p style={{whiteSpace: 'pre-wrap'}}>{msg.text}</p>
+        <div className="w-full relative z-10 flex flex-col h-screen overflow-hidden">
+          {/* Big Navbar */}
+          <div className="px-8 py-6 bg-gradient-to-r from-card/80 to-card/80 backdrop-blur-xl border-b border-border/10 flex-shrink-0">
+            <div className="max-w-7xl mx-auto">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-gradient-to-r from-primary to-secondary rounded-xl shadow-lg">
+                    <FileText className="w-8 h-8 text-foreground" />
+                  </div>
+                  <h1 className="text-3xl font-bold text-foreground">Legal Document Assistant</h1>
                 </div>
-                {msg.sender === 'user' && <User className="w-6 h-6 text-gray-600 flex-shrink-0" />}
               </div>
-            ))}
-            {isGenerating && (
-              <div className="flex items-start gap-3 my-4">
-                <Bot className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                <div className="p-3 rounded-lg bg-gray-200 text-gray-800"><i>Typing...</i></div>
+
+              <div className="flex gap-4 items-end">
+                <div className="flex-1 relative">
+                  <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Enter your document title..."
+                    className="pl-12 bg-input border-border/10 text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary focus:border-primary rounded-xl h-12 text-lg backdrop-blur-sm"
+                  />
+                </div>
+                <Button
+                  onClick={handleSaveConversation}
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-foreground px-8 rounded-xl shadow-lg shadow-green-500/30 transition-all hover:scale-105 h-12 whitespace-nowrap"
+                >
+                  <Save className="w-5 h-5 mr-2" />
+                  <span className="font-semibold">Create Document</span>
+                </Button>
               </div>
-            )}
+            </div>
           </div>
 
-          <div className="flex space-x-4">
-            <textarea
+          {/* Chat Interface */}
+          <div className="flex-1 p-8 flex items-center justify-center overflow-hidden">
+            <Card className="w-full bg-gradient-to-br from-card/60 to-card/60 backdrop-blur-xl border border-border/10 shadow-2xl rounded-2xl overflow-hidden h-full flex flex-col">
+              <CardHeader className="pb-6 bg-gradient-to-r from-primary/10 to-secondary/10 border-b border-border/10 flex-shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-gradient-to-r from-primary to-secondary rounded-2xl shadow-lg">
+                    <MessageCircle className="w-6 h-6 text-foreground" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-2xl font-bold text-foreground">AI Assistant</CardTitle>
+                    <CardDescription className="text-muted-foreground">Describe the document you want to create</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-8 flex-1 flex flex-col overflow-hidden">
+                <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 custom-scrollbar">
+                  {messages.filter(msg => msg.type !== 'document_context').map((msg, index) => (
+                    <div key={index} className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
+                      {msg.sender === 'bot' && (
+                        <div className="w-6 h-6 flex-shrink-0 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center">
+                          <Bot className="w-3 h-3 text-foreground" />
+                        </div>
+                      )}
+                      <div className={`px-3 py-2 rounded-lg max-w-xs text-xs leading-relaxed ${
+                        msg.sender === 'user'
+                          ? 'bg-primary text-foreground'
+                          : 'bg-card text-foreground border border-border/10'
+                      }`}>
+                        <p style={{whiteSpace: 'pre-wrap'}}>{msg.text}</p>
+                      </div>
+                      {msg.sender === 'user' && (
+                        <div className="w-6 h-6 flex-shrink-0 rounded-full bg-muted flex items-center justify-center">
+                          <User className="w-3 h-3 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {isGenerating && (
+                    <div className="flex gap-2">
+                      <div className="w-6 h-6 flex-shrink-0 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center">
+                        <Bot className="w-3 h-3 text-foreground animate-pulse" />
+                      </div>
+                      <div className="px-3 py-2 rounded-lg bg-card border border-border/10">
+                        <div className="flex gap-1">
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-4 flex-shrink-0 mt-4">
+                  <Input
+                    type="text"
+                    value={chatMessage}
+                    onChange={(e) => setChatMessage(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Describe the document you want to create..."
+                    className="flex-1 bg-input border-border/10 text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary focus:border-primary rounded-xl h-12 backdrop-blur-sm"
+                    disabled={isGenerating}
+                  />
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={isGenerating || !chatMessage.trim()}
+                    className="bg-gradient-to-r from-primary to-secondary hover:from-primary hover:to-secondary text-foreground px-8 rounded-xl shadow-lg shadow-primary/30 transition-all hover:scale-105 h-12"
+                  >
+                    <Send className="w-5 h-5 mr-2" />
+                    <span className="font-semibold">Send</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Document generated view with 3-column layout
+  return (
+    <div className="flex relative h-full bg-background overflow-hidden">
+      <div className="fixed inset-0 opacity-20 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary rounded-full mix-blend-multiply filter blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary rounded-full mix-blend-multiply filter blur-3xl animate-pulse delay-1000"></div>
+      </div>
+
+      {/* Left Sidebar - Chat */}
+      <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-gradient-to-b from-card/95 to-card/95 backdrop-blur-xl border-r border-border/10 flex flex-col relative z-20 overflow-hidden h-full`}>
+        <div className="p-4 border-b border-border/10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-primary" />
+              <span className="text-foreground font-semibold text-sm">Chat History</span>
+            </div>
+          </div>
+        </div>
+
+        <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 custom-scrollbar">
+          {messages.filter(msg => msg.type !== 'document_context').map((msg, index) => (
+            <div key={index} className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
+              {msg.sender === 'bot' && (
+                <div className="w-6 h-6 flex-shrink-0 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center">
+                  <Bot className="w-3 h-3 text-foreground" />
+                </div>
+              )}
+              <div className={`px-3 py-2 rounded-lg max-w-xs text-xs leading-relaxed ${
+                msg.sender === 'user'
+                  ? 'bg-primary text-foreground'
+                  : 'bg-card text-foreground border border-border/10'
+              }`}>
+                <p style={{whiteSpace: 'pre-wrap'}}>{msg.text}</p>
+              </div>
+              {msg.sender === 'user' && (
+                <div className="w-6 h-6 flex-shrink-0 rounded-full bg-muted flex items-center justify-center">
+                  <User className="w-3 h-3 text-muted-foreground" />
+                </div>
+              )}
+            </div>
+          ))}
+          {isGenerating && (
+            <div className="flex gap-2">
+              <div className="w-6 h-6 flex-shrink-0 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center">
+                <Bot className="w-3 h-3 text-foreground animate-pulse" />
+              </div>
+              <div className="px-3 py-2 rounded-lg bg-card border border-border/10">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-border/10 space-y-2">
+          <div className="flex gap-2">
+            <Input
               type="text"
               value={chatMessage}
               onChange={(e) => setChatMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Continue the conversation..."
-              className="flex-1 px-6 py-4 text-lg border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none bg-blue-50 resize-none"
-              rows={1}
+              placeholder="Ask for changes..."
+              className="flex-1 bg-input border-border/10 text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary focus:border-primary rounded-lg h-10 text-sm backdrop-blur-sm"
               disabled={isGenerating}
             />
-            <button
+            <Button
               onClick={handleSendMessage}
-              disabled={isGenerating}
-              className="px-6 py-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              disabled={isGenerating || !chatMessage.trim()}
+              className="bg-primary hover:bg-primary/80 text-foreground rounded-lg h-10 w-10 p-0"
             >
-              <Send className="w-5 h-5" />
-              <span>Send</span>
+              <Send className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col relative z-10 h-full overflow-hidden">
+        {/* Top Bar */}
+        <div className="px-6 py-4 bg-gradient-to-r from-card/80 to-card/80 backdrop-blur-xl border-b border-border/10 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-4 min-w-0 flex-1">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 hover:bg-foreground/10 rounded-lg transition-all text-muted-foreground flex-shrink-0 lg:hidden"
+            >
+              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 hover:bg-foreground/10 rounded-lg transition-all text-muted-foreground flex-shrink-0 hidden lg:block"
+            >
+              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+            <div className="min-w-0 flex-1 flex items-center gap-2">
+              {isTitleEditing ? (
+                <Input
+                  type="text"
+                  value={tempTitle}
+                  onChange={(e) => setTempTitle(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') handleSaveTitle();
+                  }}
+                  className="text-xl lg:text-2xl font-bold bg-input border-border/50 text-foreground focus:ring-2 focus:ring-primary focus:border-primary rounded-lg h-10"
+                />
+              ) : (
+                <h2 className="text-xl lg:text-2xl font-bold text-foreground truncate">{title || 'Your Document'}</h2>
+              )}
+              {mongoConversationId && ( // Only show edit/save/cancel if document exists
+                isTitleEditing ? (
+                  <>
+                    <Button size="icon" variant="ghost" onClick={handleSaveTitle} title="Save Title">
+                      <Save className="w-4 h-4 text-green-500" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={handleCancelTitleEdit} title="Cancel Edit">
+                      <XCircle className="w-4 h-4 text-muted-foreground" />
+                    </Button>
+                  </>
+                ) : (
+                  <Button size="icon" variant="ghost" onClick={handleEditTitleClick} title="Edit Title">
+                    <Edit className="w-4 h-4 text-muted-foreground" />
+                  </Button>
+                )
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing(!isEditing)}
+              className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm"
+            >
+              {isEditing ? (
+                <>
+                  <Eye className="w-4 h-4 mr-1 lg:mr-2" />
+                  <span className="hidden lg:inline">Preview</span>
+                </>
+              ) : (
+                <>
+                  <Edit className="w-4 h-4 mr-1 lg:mr-2" />
+                  <span className="hidden lg:inline">Edit</span>
+                </>
+              )}
+            </Button>
+            {mongoConversationId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsVersionsSidebarOpen(!isVersionsSidebarOpen);
+                  setCommentsSidebarOpen(false);
+                }}
+                className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm"
+              >
+                <History className="w-4 h-4 mr-1 lg:mr-2" />
+                <span className="hidden lg:inline">Versions</span>
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleFullScreen}
+              className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm"
+              title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+            >
+              <Maximize className="w-4 h-4 mr-1 lg:mr-2" />
+              <span className="hidden lg:inline">{isFullScreen ? "Exit Fullscreen" : "Fullscreen"}</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleShareDocument}
+              className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm"
+              title="Share Document"
+            >
+              <Share2 className="w-4 h-4 mr-1 lg:mr-2" />
+              <span className="hidden lg:inline">Share</span>
+            </Button>
+            {mongoConversationId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setCommentsSidebarOpen(!commentsSidebarOpen);
+                  setIsVersionsSidebarOpen(false);
+                }}
+                className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm"
+                title="View Comments"
+              >
+                <MessageCircle className="w-4 h-4 mr-1 lg:mr-2" />
+                <span className="hidden lg:inline">Comments</span>
+              </Button>
+            )}
           </div>
         </div>
 
-        {finalDocument && (
-          <div className="bg-white rounded-2xl shadow-xl p-8 mt-8">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold text-gray-900">Generated Document Preview</h2>
-              <button
-                onClick={() => setIsEditing(!isEditing)}
-                className="flex items-center space-x-1 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-              >
-                {isEditing ? <Eye className="w-4 h-4 text-gray-600" /> : <Edit className="w-4 h-4 text-gray-600" />}
-                <span className="text-sm text-gray-700">{isEditing ? 'Preview' : 'Edit'}</span>
-              </button>
-            </div>
-
-            {isEditing ? (
-              <div>
-                <MenuBar editor={editor} />
+        {/* Document Area */}
+        <div className="flex-1 overflow-hidden flex flex-col p-6 bg-card/80 rounded-xl shadow-inner">
+          {isEditing ? (
+            <div className="flex-1 border border-border/10 rounded-t-xl overflow-hidden shadow-2xl flex flex-col">
+              <MenuBar editor={editor} />
+              <div ref={documentRef} className="flex-1 overflow-y-auto custom-scrollbar bg-card/60 p-8 markdown-preview text-foreground">
                 <EditorContent editor={editor} />
               </div>
-            ) : (
-              <div className="markdown-preview" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(finalDocument) }} />
-            )}
+            </div>
+          ) : (
+            <div ref={documentRef} className="flex-1 overflow-y-auto custom-scrollbar bg-card/60 border border-border/10 rounded-xl p-8 markdown-preview shadow-2xl text-foreground" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(finalDocument) }} />
+          )}
 
-            <div className="mt-6 flex items-center justify-center gap-3 flex-wrap">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={handleSignatureFileChange}
-                className="hidden"
-              />
+          {/* Action Buttons at Bottom */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 pt-6 pb-6 border-t border-border/10 bg-card/80 rounded-b-xl">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={handleSignatureFileChange}
+              className="hidden"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleSelectSignature('landlord')}
+              className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all"
+            >
+              <PenTool className="w-4 h-4 mr-2" />
+              First Party Signature
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleSelectSignature('tenant')}
+              className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all"
+            >
+              <PenTool className="w-4 h-4 mr-2" />
+              Second Party Signature
+            </Button>
+            <Button
+              onClick={handleDownloadPdf}
+              className="bg-gradient-to-r from-accent to-accent text-foreground rounded-lg shadow-lg shadow-accent/30 transition-all"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Download PDF
+            </Button>
+            <Button
+              onClick={handleSaveConversation}
+              className="bg-gradient-to-r from-primary to-secondary text-foreground rounded-lg shadow-lg shadow-primary/30 transition-all"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save Version
+            </Button>
+          </div>
+
+
+        </div>
+      </div>
+
+      {/* Right Sidebar - Comments */}
+      <div className={`${commentsSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-gradient-to-b from-card/95 to-card/95 backdrop-blur-xl border-l border-border/10 flex flex-col relative z-20 overflow-hidden h-full`}>
+        {commentsSidebarOpen && mongoConversationId && (
+          <div className="flex flex-col h-full">
+            <div className="p-4 border-b border-border/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-5 h-5 text-primary" />
+                <span className="text-foreground font-semibold text-sm">Comments</span>
+              </div>
               <button
-                onClick={() => handleSelectSignature('landlord')}
-                className="px-5 py-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors flex items-center gap-2"
+                onClick={() => setCommentsSidebarOpen(false)}
+                className="p-1.5 hover:bg-muted rounded-lg transition-colors"
               >
-                <PenTool className="w-5 h-5" />
-                <span>First Party Signature</span>
+                <X className="w-4 h-4 text-muted-foreground" />
               </button>
-              <button
-                onClick={() => handleSelectSignature('tenant')}
-                className="px-5 py-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors flex items-center gap-2"
-              >
-                <PenTool className="w-5 h-5" />
-                <span>Second Party Signature</span>
-              </button>
-              <button
-                onClick={handleDownloadPdf}
-                className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-semibold py-3 px-8 rounded-xl text-lg transition-all duration-200 transform hover:scale-105 flex items-center justify-center gap-2"
-              >
-                <Download className="w-6 h-6" />
-                <span>Download as PDF</span>
-              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <CommentList documentId={mongoConversationId} />
             </div>
           </div>
         )}
       </div>
+
+      {/* Right Sidebar - Versions */}
+      <div className={`${isVersionsSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-gradient-to-b from-card/95 to-card/95 backdrop-blur-xl border-l border-border/10 flex flex-col relative z-20 overflow-hidden h-full`}>
+        <VersionsSidebar
+          conversationId={mongoConversationId}
+          onSelectVersion={handleSelectVersion}
+          onClose={() => setIsVersionsSidebarOpen(false)}
+          currentVersion={currentVersion}
+          onDeleteVersion={handleDeleteVersion} // Pass the delete function
+        />
+      </div>
+
+      {/* Custom Styles */}
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .animate-fadeIn {
+          animation: fadeIn 0.5s ease-out;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(59, 130, 246, 0.5);
+          border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(59, 130, 246, 0.7);
+        }
+
+        .delay-1000 {
+          animation-delay: 1s;
+        }
+      `}</style>
     </div>
   );
 };

@@ -23,3 +23,6 @@ markdown
 cloudinary
 PyPDF2
 reportlab
+openai
+channels
+daphne
