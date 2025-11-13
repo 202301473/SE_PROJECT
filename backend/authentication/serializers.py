@@ -8,6 +8,8 @@ class UserSerializer(serializers.Serializer):
     email = serializers.EmailField(read_only=True)
     username = serializers.CharField(read_only=True)
     name = serializers.CharField(read_only=True)
+    profile_picture = serializers.URLField(read_only=True)
+    cover_photo = serializers.URLField(read_only=True) # Added cover_photo
     auth_provider = serializers.CharField(read_only=True)
     date_joined = serializers.DateTimeField(read_only=True)
     
@@ -18,6 +20,8 @@ class UserSerializer(serializers.Serializer):
             'email': instance.email,
             'username': instance.username,
             'name': instance.name,
+            'profile_picture': instance.profile_picture,
+            'cover_photo': instance.cover_photo, # Added cover_photo
             'auth_provider': instance.auth_provider,
             'date_joined': instance.date_joined
         }
@@ -77,9 +81,11 @@ class UserProfileSerializer(serializers.Serializer):
     """Serializer for updating user profile"""
     name = serializers.CharField(required=False, allow_blank=True, max_length=255)
     profile_picture = serializers.URLField(required=False, allow_blank=True, max_length=255)
+    cover_photo = serializers.URLField(required=False, allow_blank=True, max_length=255) # Added cover_photo
 
     def update(self, instance, validated_data):
         instance.name = validated_data.get('name', instance.name)
         instance.profile_picture = validated_data.get('profile_picture', instance.profile_picture)
+        instance.cover_photo = validated_data.get('cover_photo', instance.cover_photo) # Added cover_photo
         instance.save()
         return instance

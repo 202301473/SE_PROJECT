@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./Components/Navbar/Navbar";
+import Footer from "./Components/Footer";
 import Home from "./pages/Home";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
@@ -15,6 +16,9 @@ import LawyerConnect from "./pages/LawyerConnect";
 import MyDocuments from "./pages/MyDocuments";
 import DocumentCreation from "./pages/DocumentCreation";
 import DocumentVersions from "./pages/DocumentVersions"; // Added this import
+import SharedDocumentView from "./pages/SharedDocumentView";
+import ParticlesComponent from "./Components/Particles";
+import ProtectedRoute from "./routes/ProtectedRoute";
 
 function AppContent() {
   const location = useLocation();
@@ -22,32 +26,114 @@ function AppContent() {
   const shouldShowNavbar = !hideNavbarRoutes.includes(location.pathname);
 
   return (
-      <>
-        {/* Conditionally render navbar */}
-        {shouldShowNavbar && <Navbar />}
-        
-        {/* Page routes with conditional top padding for fixed navbar */}
-        <main className={shouldShowNavbar ? "pt-20 bg-gray-50" : "bg-gray-50"}>
+    <div className="relative flex flex-col h-screen bg-white text-white" style={{ '--navbar-height': '4.5rem' }}> {/* Set a reasonable navbar height */}
+      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-gray-900 via-gray-800 to-black opacity-60" style={{ zIndex: -2 }}></div>
+      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-3/4 h-3/4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/30 via-purple-900/20 to-transparent blur-3xl" style={{ zIndex: -1 }}></div>
+      {shouldShowNavbar && <Navbar />}
+      <div style={{ position: 'absolute', zIndex: -1, width: '100%', height: '100%', opacity: 0.4 }}>
+        <ParticlesComponent id="tsparticles" />
+      </div>
+      <main className="flex-grow relative z-10" style={{ height: 'calc(100vh - var(--navbar-height))' }}> {/* Use calc() for main height */}
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/document-analyser" element={<DocumentAnalyzer />} /> {/* Added this route */}
-          <Route path="/document-analyser/:id" element={<DocumentAnalyzer />} />
-          <Route path="/document-creation" element={<DocumentCreation />} />
-          <Route path="/document-creation/:id" element={<DocumentCreation />} />
-          <Route path="/document-versions/:id" element={<DocumentVersions />} /> {/* Added this route */}
-          <Route path="/lawyer-connect" element={<LawyerConnect />} />
-          <Route path="/my-documents" element={<MyDocuments />} />
-
-
-          <Route path="/lawyer-profile/:id" element={<LawyerProfile />} />
-          <Route path="/lawyers" element={<Lawyers />} />
+          <Route
+            path="/document-analyser"
+            element={(
+              <ProtectedRoute>
+                <DocumentAnalyzer />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/document-analyser/:id"
+            element={(
+              <ProtectedRoute>
+                <DocumentAnalyzer />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/document-creation"
+            element={(
+              <ProtectedRoute>
+                <DocumentCreation />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/document-creation/:id"
+            element={(
+              <ProtectedRoute>
+                <DocumentCreation />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/document-versions/:id"
+            element={(
+              <ProtectedRoute>
+                <DocumentVersions />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/lawyer-connect"
+            element={(
+              <ProtectedRoute>
+                <LawyerConnect />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/my-documents"
+            element={(
+              <ProtectedRoute>
+                <MyDocuments />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/lawyer-profile/:id"
+            element={(
+              <ProtectedRoute>
+                <LawyerProfile />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/lawyers"
+            element={(
+              <ProtectedRoute>
+                <Lawyers />
+              </ProtectedRoute>
+            )}
+          />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/verify-otp" element={<VerifyOtp />} /> {/* Added this route */}
-          <Route path="/profile" element={<Profile />} />
+          <Route
+            path="/verify-otp"
+            element={<VerifyOtp />}
+          />
+          <Route
+            path="/profile"
+            element={(
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/documentShare/:id"
+            element={(
+              <ProtectedRoute>
+                <SharedDocumentView />
+              </ProtectedRoute>
+            )}
+          />
         </Routes>
       </main>
-    </>
+      {/* {shouldShowNavbar && <Footer />} */}
+    </div>
   );
 }
 

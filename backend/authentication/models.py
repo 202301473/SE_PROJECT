@@ -10,7 +10,8 @@ class User(Document):
     email = EmailField(required=True, unique=True, max_length=255)
     username = StringField(required=True, unique=True, max_length=150)
     name = StringField(max_length=255, default='')
-    profile_picture = StringField(max_length=255, default='') # Added profile picture field
+    profile_picture = StringField(max_length=255, default='')
+    cover_photo = StringField(max_length=255, default='') # Added cover photo field
     password = StringField(required=True)
     
     # Authentication fields

@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'document_summarizer',
     'corsheaders',
     'whitenoise.runserver_nostatic',
+    'channels', # Added for Django Channels
 ]
 
 MIDDLEWARE = [
@@ -101,6 +102,13 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'legal_doc_generator.wsgi.application'
+ASGI_APPLICATION = 'legal_doc_generator.asgi.application' # Added for Django Channels
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer", # Use in-memory for development
+    },
+}
 
 
 # Database
@@ -179,6 +187,7 @@ cloudinary.config(
 
 # MongoDB configuration
 MONGO_URI = os.getenv("MONGO_URI")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "legal_document_navigator_db")
 
 if MONGO_URI:
     import mongoengine

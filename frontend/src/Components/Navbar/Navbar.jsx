@@ -1,162 +1,156 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { Button } from "@/Components/ui/button";
-import NavItem from "./Navitem";
-import { User, Menu, X, LogOut } from "lucide-react"; // Added LogOut icon
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/Button";
+import { User, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from '../../context/AuthContext'; // Import useAuth
 
-const Navbar = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const { isAuthenticated, user, logout } = useAuth(); // Use AuthContext
+export default function Navbar() {
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
+  const navigate = useNavigate();
+  const { user, isAuthenticated, logout } = useAuth(); // Use AuthContext
 
-      const navLinks = [
-      { to: "/", label: "Home" },
-      { to: "/document-analyser", label: "Document Analyser" },
-      { to: "/document-creation", label: "Document Creation" },
-      { to: "/lawyer-connect", label: "Lawyer Connect" },
-      { to: "/my-documents", label: "My Documents" },
-    ];
-  
-    return (
-      <>
-        {/* Navbar */}
-        <nav className="fixed rounded-xl mx-2 sm:mx-3 md:mx-4 top-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-sm shadow-lg">
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between">
-            {/* Logo */}
-            <div className="flex-shrink-0 text-2xl font-bold text-gray-800">
-              AdvocAI
-            </div>
-  
-            {/* Desktop Nav Links */}
-            <div className="hidden md:flex space-x-4 md:space-x-8 text-gray-700 hover:text-black font-medium">
-              {navLinks.map((link, index) => (
-                <NavItem key={index} to={link.to} label={link.label} />
-              ))}
-            </div>
-  
-            {/* Desktop Auth/Profile */}
-            <div className="hidden md:flex items-center space-x-4">
-              {isAuthenticated ? (
-                <>
-                  <Link to="/profile">
-                    <button className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 transition cursor-pointer">
-                      {user && user.profile_picture ? (
-                        <img src={user.profile_picture} alt="Profile" className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        <User className="w-6 h-6 text-gray-700" />
-                      )}
-                    </button>
-                  </Link>
-                  <Button
-                    onClick={logout}
-                    variant="outline"
-                    className="px-4 outline-1 rounded-lg hover:bg-black hover:text-white cursor-pointer flex items-center space-x-2"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>Logout</span>
-                  </Button>
-                </>
-              ) : (
-                <Link to="/login">
-                  <Button
-                    variant="outline"
-                    className="px-4 outline-1 rounded-lg hover:bg-black hover:text-white cursor-pointer"
-                  >
-                    Login
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setShowProfileMenu(false);
+      }
+    }
+
+    if (showProfileMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showProfileMenu]);
+
+  const navLinks = [
+    { to: "/", label: "Home" },
+    { to: "/document-analyser", label: "Document Analyzer" },
+    { to: "/document-creation", label: "Document Generator" },
+    { to: "/my-documents", label: "My Documents" },
+  ];
+
+  const handleProtectedNavClick = (path) => {
+    if (!isAuthenticated) { // Use isAuthenticated from AuthContext
+      navigate("/auth/signin");
+    } else {
+      navigate(path);
+    }
+  };
+
+  return (
+    <nav className="bg-background/80 backdrop-blur-md sticky top-0 z-50 border-b py-4 border-border shadow-lg shadow-black/20 h-[var(--navbar-height)]">
+      <div className="container mx-auto px-5 h-full">
+        <div className="flex items-center justify-between h-17">
+          <Link to="/" className="text-3xl font-extrabold text-white hover:text-primary transition-colors duration-200 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
+            AdvocAI
+          </Link>
+          
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center space-x-2">
+            {navLinks.map((link, index) => (
+              <Link 
+                to={link.to} 
+                key={index} 
+                className="text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg hover:bg-foreground/5 transition-all duration-200 relative group"
+              >
+                {link.label}
+                <span className="absolute bottom-1 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300"></span>
+              </Link>
+            ))}
+          </div>
+
+          {/* Desktop Auth Section */}
+          <div className="hidden md:flex items-center space-x-4">
+            {isAuthenticated ? (
+              <>
+                <Link to="/profile">
+                  <Button variant="ghost" className="hover:bg-foreground/5 rounded-full">
+                    {user && user.profile_picture ? (
+                      <img src={user.profile_picture} alt="Profile" className="w-9 h-8 rounded-full border-2 border-primary/50 hover:border-primary transition-colors" />
+                    ) : (
+                      <div className="w-9 h-8 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30">
+                        <User size={17} className="text-primary" />
+                      </div>
+                    )}
                   </Button>
                 </Link>
-              )}
-            </div>
+                <Button 
+                  onClick={logout} 
+                  variant="outline" 
+                  size="sm"
+                  className="border-border hover:border-destructive hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
+                >
+                  <LogOut size={15} className="mr-2" />
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <Link to="/login">
+                <Button className="bg-gradient-to-r from-primary to-secondary hover:from-primary hover:to-secondary text-white shadow-md shadow-primary/30 hover:shadow-lg shadow-primary/40 transition-all duration-200">
+                  Login
+                </Button>
+              </Link>
+            )}
+          </div>
 
-          {/* Mobile Hamburger */}
-          <div className="md:hidden">
-            <button
-              onClick={() => setIsOpen(true)}
-              className="p-2 rounded-md hover:bg-gray-200"
+          {/* Mobile Menu Button */}
+          <div className="md:hidden flex items-center">
+            <button 
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-3 rounded-lg hover:bg-foreground/10 transition-colors duration-200 text-muted-foreground hover:text-foreground"
+              aria-label="Toggle menu"
             >
-              <Menu className="w-6 h-6 text-gray-800" />
+              <Menu size={23} />
             </button>
           </div>
         </div>
-      </nav>
+      </div>
 
-      {/* Sidebar (Mobile Only) */}
-      <div
-        className={`fixed top-0 -right-2 h-min w-64 rounded-xl m-2 bg-white shadow-xl transform transition-transform duration-300 z-60 flex flex-col ${
-          isOpen ? "translate-x-0" : "translate-x-full"
-        }`}
-      >
-        {/* Sidebar Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <span className="text-xl font-bold text-gray-800">AdvocAI</span>
+      {/* Mobile Menu Overlay */}
+      {isMenuOpen && (
+        <div className="md:hidden fixed inset-0 bg-background/90 backdrop-blur-md z-40 flex flex-col items-center justify-center space-y-8">
           <button
-            onClick={() => setIsOpen(false)}
-            className="p-2 rounded-md hover:bg-gray-200"
+            onClick={() => setIsMenuOpen(false)}
+            className="absolute top-5 right-5 p-3 rounded-lg hover:bg-foreground/10 transition-colors duration-200 text-foreground"
           >
-            <X className="w-6 h-6 text-gray-800" />
+            <X size={24} />
           </button>
-        </div>
-
-        {/* Sidebar Nav Links */}
-        <div className="flex flex-col p-4 space-y-4 text-gray-700 font-medium">
           {navLinks.map((link, index) => (
-            <div 
-            key={index}
-            onClick={() => setIsOpen(false)}>
-              <NavItem to={link.to} label={link.label} />
-            </div>
+            <Link 
+              to={link.to} 
+              key={index} 
+              className="text-3xl font-bold text-foreground hover:text-primary transition-colors duration-200"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              {link.label}
+            </Link>
           ))}
-        </div>
-
-        {/* Sidebar Auth/Profile */}
-        <div className="p-4 border-t mt-auto">
           {isAuthenticated ? (
             <>
-              <Link to="/profile" onClick={() => setIsOpen(false)} className="flex items-center space-x-3 mb-4">
-                <button className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 transition cursor-pointer">
-                  {user && user.profile_picture ? (
-                    <img src={user.profile_picture} alt="Profile" className="w-full h-full rounded-full object-cover" />
-                  ) : (
-                    <User className="w-6 h-6 text-gray-700" />
-                  )}
-                </button>
-                <span className="text-gray-800 font-medium">{user?.name || user?.username || 'Profile'}</span>
+              <Link to="/profile" className="text-3xl font-bold text-foreground hover:text-primary transition-colors duration-200" onClick={() => setIsMenuOpen(false)}>
+                Profile
               </Link>
-              <Button
-                onClick={() => {
-                  logout();
-                  setIsOpen(false);
-                }}
-                variant="outline"
-                className="w-full outline-1 rounded-lg hover:bg-black hover:text-white cursor-pointer flex items-center justify-center space-x-2"
+              <Button 
+                onClick={() => { logout(); setIsMenuOpen(false); }} 
+                variant="outline" 
+                size="lg"
+                className="border-border hover:border-destructive hover:bg-destructive/10 hover:text-destructive transition-all duration-200 text-3xl font-bold"
               >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
+                <LogOut size={25} className="mr-3" />
+                Logout
               </Button>
             </>
           ) : (
-            <Link to="/login" onClick={() => setIsOpen(false)}>
-              <Button
-                variant="outline"
-                className="w-full outline-1 rounded-lg hover:bg-black hover:text-white cursor-pointer"
-              >
+            <Link to="/login" className="text-3xl font-bold text-foreground hover:text-primary transition-colors duration-200" onClick={() => setIsMenuOpen(false)}>
+              <Button size="lg" className="bg-gradient-to-r from-primary to-secondary hover:from-primary hover:to-secondary text-white shadow-md shadow-primary/30 hover:shadow-lg shadow-primary/40 transition-all duration-200 text-3xl font-bold">
                 Login
               </Button>
             </Link>
           )}
         </div>
-      </div>
-
-      {/* Background overlay */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-50"
-          onClick={() => setIsOpen(false)}
-        />
       )}
-    </>
+    </nav>
   );
-};
-
-export default Navbar;
-
+}

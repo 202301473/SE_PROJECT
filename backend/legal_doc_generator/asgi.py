@@ -1,16 +1,21 @@
-"""
-ASGI config for legal_doc_generator project.
-
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
-"""
-
 import os
 
+from channels.auth import AuthMiddlewareStack
+from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'legal_doc_generator.settings')
 
-application = get_asgi_application()
+# Get the Django ASGI application early to ensure the AppRegistry is populated
+django_asgi_app = get_asgi_application()
+
+from documents.routing import websocket_urlpatterns # Now this import should be safe
+
+application = ProtocolTypeRouter({
+    "http": django_asgi_app,
+    "websocket": AuthMiddlewareStack(
+        URLRouter(
+            websocket_urlpatterns
+        )
+    ),
+})

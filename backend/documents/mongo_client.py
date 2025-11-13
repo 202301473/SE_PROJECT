@@ -16,10 +16,16 @@ def get_db():
 db = get_db()
 conversations_collection = db['conversations']
 
-def get_all_conversations():
-    """Fetches all conversations, returning the id, title, created_at, and the latest document content."""
+def get_all_conversations(user=None):
+    """Fetches all conversations, returning the id, title, created_at, and the latest document content.
+    Can filter by user if provided.
+    """
     try:
-        conversations = conversations_collection.find({}, {'title': 1, 'created_at': 1, 'document_versions': 1})
+        query = {}
+        if user:
+            query['owner'] = user
+
+        conversations = conversations_collection.find(query, {'title': 1, 'created_at': 1, 'document_versions': 1, 'owner': 1})
         # Convert ObjectId to string for JSON serialization and get latest document
         result = []
         for conv in conversations:
@@ -65,6 +71,7 @@ def save_conversation(title, messages, initial_document_content=None, uploaded_b
             'document_versions': document_versions,
             'created_at': current_time,
             'updated_at': current_time,
+            'owner': uploaded_by, # Add owner field
         }
         result = conversations_collection.insert_one(conversation_doc)
         print(f"[DEBUG] New conversation saved with ID: {result.inserted_id}")
@@ -126,7 +133,7 @@ def delete_conversation(conversation_id):
         return True
     except Exception as e:
         print(f"Error deleting conversation: {e}")
-        return False
+
 
 def get_document_version_content(conversation_id, version_number):
     """Retrieves the content of a specific document version from a conversation."""
@@ -141,3 +148,30 @@ def get_document_version_content(conversation_id, version_number):
     except Exception as e:
         print(f"Error retrieving document version content: {e}")
         return None
+
+def delete_document_version(conversation_id, version_number):
+    """Deletes a specific document version from a conversation.
+    If, after deletion, no versions remain, the entire conversation is deleted.
+    """
+    try:
+        # First, pull the specific version
+        result = conversations_collection.update_one(
+            {'_id': ObjectId(conversation_id)},
+            {'$pull': {'document_versions': {'version_number': version_number}}}
+        )
+
+        if result.modified_count > 0:
+            # Check if any document versions remain
+            conversation = conversations_collection.find_one(
+                {'_id': ObjectId(conversation_id)},
+                {'document_versions': 1}
+            )
+            if conversation and (not 'document_versions' in conversation or not conversation['document_versions']):
+                # If no versions remain, delete the entire conversation
+                delete_conversation(conversation_id)
+                print(f"Conversation {conversation_id} deleted as no versions remained.")
+            return True
+        return False
+    except Exception as e:
+        print(f"Error deleting document version: {e}")
+        return False

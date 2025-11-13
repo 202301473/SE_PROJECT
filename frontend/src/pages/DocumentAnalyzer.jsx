@@ -1,8 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, Bot, MessageCircle, Send, FileText, Search, Loader2, History, X, ChevronRight } from 'lucide-react';
-import { uploadDocument, sendChatMessage, getUserSessions, getChatHistory } from '../utils/api';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Upload,
+  Bot,
+  MessageCircle,
+  Send,
+  FileText,
+  Loader2,
+  History,
+  X,
+  Sparkles,
+  User,
+  Copy,
+  Check,
+} from 'lucide-react';
+
+import { uploadDocument as uploadDocumentApi, getUserSessions as getUserSessionsApi, getChatHistory as getChatHistoryApi, sendChatMessage as sendChatMessageApi, } from '../utils/api';
 
 const DocumentAnalyzer = () => {
+  const fileInputRef = useRef(null);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [summary, setSummary] = useState('');
   const [sessionId, setSessionId] = useState(null);
@@ -14,9 +29,27 @@ const DocumentAnalyzer = () => {
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [dragActive, setDragActive] = useState(false);
+  const [isSummaryCopied, setIsSummaryCopied] = useState(false); // New state for copy status
+
+
+  const resetForNewDocument = () => {
+    setUploadedFile(null);
+    setSummary('');
+    setSessionId(null);
+    setChatHistory([]);
+    setError('');
+
+  };
+
+  const handleCopySummary = () => {
+    navigator.clipboard.writeText(summary);
+    setIsSummaryCopied(true);
+    setTimeout(() => setIsSummaryCopied(false), 2000); // Reset after 2 seconds
+  };
 
   const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0] ?? null;
     if (!file) return;
 
     setUploadedFile(file);
@@ -25,21 +58,44 @@ const DocumentAnalyzer = () => {
     setSummary('');
 
     try {
-      const response = await uploadDocument(file);
-      
-      if (response.success) {
-        setSummary(response.summary);
-        setSessionId(response.session_id);
-        // Initialize chat with welcome message
-        setChatHistory([{
-          id: 1,
-          sender: 'AdvocAI',
-          message: "Hi! I've analyzed your document. Feel free to ask me any questions about the terms, risks, or anything else you'd like to understand better.",
-          timestamp: new Date().toLocaleTimeString()
-        }]);
+      const response = await uploadDocumentApi(file);
+
+      // Accept multiple possible shapes from backend
+      const receivedSummary = response?.summary ?? response?.data?.summary ?? '';
+      const receivedSessionId = response?.session_id ?? response?.sessionId ?? null;
+
+      // If backend didn't provide a session id, create a client-side one so chat works
+      const finalSessionId = receivedSessionId ?? `local-${Date.now()}`;
+      setSessionId(finalSessionId);
+
+      if (receivedSummary) {
+        setSummary(receivedSummary);
+        setChatHistory([
+          {
+            id: Date.now(),
+            sender: 'AdvocAI',
+            message:
+              "Hi! I've analyzed your document. Feel free to ask me any questions about the terms, risks, or anything else you'd like to understand better.",
+            timestamp: new Date().toLocaleTimeString(),
+          },
+        ]);
+      } else {
+        // If there's no summary but upload succeeded, show a friendly placeholder
+        setSummary(response?.summary_preview ?? response?.summaryPreview ?? 'No summary available');
+        setChatHistory([
+          {
+            id: Date.now(),
+            sender: 'AdvocAI',
+            message: "Document uploaded successfully. Ask a question to start the analysis.",
+            timestamp: new Date().toLocaleTimeString(),
+          },
+        ]);
       }
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to upload document');
+      console.error(err);
+      // better extraction of error text
+      const message = err?.response?.data?.error || err?.message || 'Failed to upload document';
+      setError(message);
       setUploadedFile(null);
     } finally {
       setUploading(false);
@@ -48,18 +104,26 @@ const DocumentAnalyzer = () => {
 
   const handleDragOver = (event) => {
     event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setDragActive(true);
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    setDragActive(false);
   };
 
   const handleDrop = (event) => {
     event.preventDefault();
+    setDragActive(false);
     const files = event.dataTransfer.files;
-    if (files.length > 0) {
+    if (files && files.length > 0) {
       const file = files[0];
-      const input = document.getElementById('file-upload');
-      if (input) {
+      if (fileInputRef.current) {
         const dataTransfer = new DataTransfer();
         dataTransfer.items.add(file);
-        input.files = dataTransfer.files;
+        fileInputRef.current.files = dataTransfer.files;
+        // reuse same handler shape
         handleFileUpload({ target: { files: dataTransfer.files } });
       }
     }
@@ -72,61 +136,57 @@ const DocumentAnalyzer = () => {
     setChatMessage('');
     setLoading(true);
 
-    // Add user message to chat
     const newUserMessage = {
       id: Date.now(),
       sender: 'User',
       message: userMessage,
-      timestamp: new Date().toLocaleTimeString()
+      timestamp: new Date().toLocaleTimeString(),
     };
-    setChatHistory(prev => [...prev, newUserMessage]);
+
+    setChatHistory((prev) => [...prev, newUserMessage]);
 
     try {
-      const response = await sendChatMessage(sessionId, userMessage);
-      
-      if (response.response) {
+      const response = await sendChatMessageApi(sessionId, userMessage);
+      const aiText = response?.response ?? response?.message ?? response?.text ?? response?.data?.text ?? '';
+
+      if (aiText) {
         const aiMessage = {
           id: Date.now() + 1,
           sender: 'AdvocAI',
-          message: response.response,
-          timestamp: new Date().toLocaleTimeString()
+          message: aiText,
+          timestamp: new Date().toLocaleTimeString(),
         };
-        setChatHistory(prev => [...prev, aiMessage]);
+        setChatHistory((prev) => [...prev, aiMessage]);
       }
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to send message');
-      // Remove user message on error
-      setChatHistory(prev => prev.filter(msg => msg.id !== newUserMessage.id));
+      console.error(err);
+      const message = err?.response?.data?.error || err?.message || 'Failed to send message';
+      setError(message);
+      // remove the optimistic user message
+      setChatHistory((prev) => prev.filter((m) => m.id !== newUserMessage.id));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleKeyPress = (event) => {
-    if (event.key === 'Enter') {
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
       handleSendMessage();
     }
   };
 
-  // Fetch user sessions on component mount
   useEffect(() => {
     fetchSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Fetch sessions when a new document is uploaded
-  useEffect(() => {
-    if (sessionId) {
-      fetchSessions();
-    }
-  }, [sessionId]);
 
   const fetchSessions = async () => {
     setLoadingSessions(true);
     try {
-      const response = await getUserSessions();
-      if (response.sessions) {
-        setSessions(response.sessions);
-      }
+      const response = await getUserSessionsApi();
+      const list = Array.isArray(response) ? response : response?.sessions ?? response?.data?.sessions ?? [];
+      setSessions(list);
     } catch (err) {
       console.error('Failed to fetch sessions:', err);
     } finally {
@@ -134,309 +194,343 @@ const DocumentAnalyzer = () => {
     }
   };
 
-  const handleSessionClick = async (selectedSessionId) => {
-    if (selectedSessionId === sessionId) return; // Already loaded
-    
+  const openSession = async (session) => {
+    if (!session) return;
+    setSessionId(session.id ?? session._id ?? `session-${Date.now()}`);
+    setSidebarOpen(false);
     setLoading(true);
-    setError('');
-    
     try {
-      const response = await getChatHistory(selectedSessionId);
-      if (response.session && response.messages) {
-        setSessionId(response.session.id);
-        setSummary(response.session.summary);
-        
-        // Convert messages to chat history format
-        const history = response.messages.map(msg => ({
-          id: msg.id,
-          sender: msg.is_user ? 'User' : 'AdvocAI',
-          message: msg.message,
-          timestamp: new Date(msg.timestamp).toLocaleTimeString()
-        }));
-        
-        setChatHistory(history);
-        setUploadedFile({ name: 'Previous Document' }); // Placeholder
-      }
+      const data = await getChatHistoryApi(session.id ?? session._id ?? session.sessionId);
+      const sessionInfo = data?.session ?? data ?? {};
+      const messagesRaw = data?.messages ?? data?.messages_list ?? [];
+
+      const messages = (messagesRaw || []).map((m, idx) => ({
+        id: m.id ?? m._id ?? idx + 1,
+        sender: (m.sender || m.role || '').toLowerCase() === 'user' ? 'User' : 'AdvocAI',
+        message: m.text || m.message || '',
+        timestamp: m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString(),
+      }));
+
+      setChatHistory(messages);
+      const sessionSummary = sessionInfo.summary ?? session.summary ?? session.summary_preview ?? '';
+      if (sessionSummary) setSummary(sessionSummary);
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to load session');
+      console.error(err);
+      const message = err?.response?.data?.error || err?.message || 'Failed to load session';
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return dateString;
+
     const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 1) return 'Today';
-    if (diffDays === 2) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays - 1} days ago`;
-    
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+
     return date.toLocaleDateString();
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex relative">
-        {/* Side Panel - Previous Sessions */}
-        <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 overflow-hidden border-r border-gray-200 bg-white ${sidebarOpen ? 'px-4 py-6' : 'p-0'} min-h-screen sticky top-20`}>
+    <div className="flex h-[89vh] bg-background">
+      {/* Animated background effects */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 -left-48 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />
+        <div
+          className="absolute bottom-1/4 -right-48 w-96 h-96 bg-secondary/10 rounded-full blur-3xl animate-pulse"
+          style={{ animationDelay: '1s' }}
+        />
+      </div>
+
+      {/* Sidebar */}
+      <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 h-full relative z-10`}>
+        <div className={`${sidebarOpen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300 bg-card/60 backdrop-blur-xl border-r border-border/50 flex flex-col h-full`}>
           {sidebarOpen && (
-            <div className="h-full flex flex-col">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center">
-                  <History className="w-5 h-5 text-blue-600 mr-2" />
-                  <h2 className="text-xl font-bold text-gray-900">Chat History</h2>
+            <>
+              <div className="p-6 border-b border-border/50 flex-shrink-0">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
+                      <History className="w-5 h-5 text-foreground" />
+                    </div>
+                    <h2 className="text-lg font-semibold text-foreground">History</h2>
+                  </div>
+                  <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+                    <X className="w-5 h-5 text-muted-foreground" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
+                <p className="text-sm text-muted-foreground">Previous sessions</p>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              <div className="h-[70vh] overflow-y-auto p-4 custom-scrollbar">
                 {loadingSessions ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
                   </div>
                 ) : sessions.length > 0 ? (
                   <div className="space-y-2">
                     {sessions.map((session) => (
                       <button
-                        key={session.id}
-                        onClick={() => handleSessionClick(session.id)}
-                        className={`w-full text-left p-3 rounded-lg border transition-all ${
-                          sessionId === session.id
-                            ? 'bg-blue-50 border-blue-200 shadow-sm'
-                            : 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
+                        key={session.id ?? session._id}
+                        onClick={() => openSession(session)}
+                        className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${
+                          sessionId === (session.id ?? session._id)
+                            ? 'bg-gradient-to-br from-primary/20 to-secondary/20 border-primary/50 shadow-lg shadow-primary/20'
+                            : 'bg-card/40 border-border/50 hover:bg-card/60 hover:border-border'
                         }`}
                       >
-                        <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <FileText className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center mb-1">
-                              <FileText className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
-                              <p className="text-xs text-gray-500 font-medium truncate">
-                                Session #{session.id}
-                              </p>
-                            </div>
-                            <p className="text-sm text-gray-700 line-clamp-2 mb-2">
-                              {session.summary_preview}
-                            </p>
-                            <div className="flex items-center justify-between text-xs text-gray-500">
-                              <span>{formatDate(session.created_at)}</span>
-                              {session.message_count > 0 && (
-                                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                                  {session.message_count} msgs
-                                </span>
+                            <p className="text-sm text-foreground font-medium line-clamp-2 mb-2">{session.summary_preview || session.title || 'Document Analysis'}</p>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">{formatDate(session.created_at || session.createdAt || session.date)}</span>
+                              {Number(session.message_count || session.messages_count || 0) > 0 && (
+                                <span className="bg-primary/20 text-primary px-2 py-0.5 rounded-full">{session.message_count || session.messages_count}</span>
                               )}
                             </div>
                           </div>
-                          {sessionId === session.id && (
-                            <ChevronRight className="w-5 h-5 text-blue-600 ml-2 flex-shrink-0" />
-                          )}
                         </div>
                       </button>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <History className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm">No previous sessions</p>
-                    <p className="text-xs mt-1">Upload a document to get started</p>
+                  <div className="text-center py-12">
+                    <div className="p-4 bg-card/40 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                      <History className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <p className="text-muted-foreground text-sm mb-1">No previous sessions</p>
+                    <p className="text-muted-foreground text-xs">Upload a document to start</p>
                   </div>
                 )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Sidebar toggle button */}
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed left-0 top-1/2 -translate-y-1/2 p-3 bg-gradient-to-r from-primary to-secondary text-foreground rounded-r-xl shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-200 z-20"
+        >
+          <History className="w-5 h-5" />
+        </button>
+      )}
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="max-w-7xl mx-auto p-6 lg:p-12 flex-1 flex flex-col w-full h-full">
+          {/* Upload / Summary header */}
+          {!summary ? (
+            <div className="mb-8">
+              <div
+                className={`relative overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-300 ${
+                  dragActive ? 'border-primary bg-primary/10 scale-[1.02]' : uploadedFile ? 'border-accent/50 bg-card/40' : 'border-border/20 hover:border-border hover:bg-card/30'
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => !uploading && fileInputRef.current && fileInputRef.current.click()}
+              >
+                <input
+                  id="file-upload"
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.txt"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  disabled={uploading}
+                />
+
+                <div className="px-6 pts-8 sm:p-10 lg:p-12 text-center cursor-pointer">
+                  {uploading ? (
+                    <div className="space-y-4">
+                      <div className="relative w-16 h-16 mx-auto">
+                        <Loader2 className="w-16 h-16 text-primary animate-spin" />
+                        <Sparkles className="w-6 h-6 text-secondary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                      </div>
+                      <div>
+                        <p className="text-lg font-medium text-foreground mb-1">Analyzing your document...</p>
+                        <p className="text-sm text-muted-foreground">This may take a moment</p>
+                      </div>
+                    </div>
+                  ) : uploadedFile ? (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-accent/20 rounded-full w-20 h-20 mx-auto flex items-center justify-center border border-accent/30">
+                        <FileText className="w-10 h-10 text-accent" />
+                      </div>
+                      <div>
+                        <p className="text-lg font-medium text-foreground mb-1">{uploadedFile.name}</p>
+                        <p className="text-sm text-accent">✓ Ready for analysis</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="relative w-20 h-20 mx-auto">
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary to-secondary rounded-2xl opacity-20 blur-xl" />
+                        <div className="relative p-4 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl border border-primary/30">
+                          <Upload className="w-12 h-12 text-primary" />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-lg font-medium text-foreground mb-2">Drop your document here</p>
+                        <p className="text-sm text-muted-foreground mb-4">or click to browse your files</p>
+                        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                          <span>Supports:</span>
+                          <span className="px-2 py-1 bg-card/50 rounded">PDF</span>
+                          <span className="px-2 py-1 bg-card/50 rounded">DOCX</span>
+                          <span className="px-2 py-1 bg-card/50 rounded">TXT</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {error && (
+                  <div className="mt-4 p-4 bg-destructive/10 border border-destructive/30 rounded-xl">
+                    <p className="text-destructive text-sm">{error}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="mb-8 flex items-center justify-between">
+              <div className="text-left">
+                <h2 className="text-xl font-semibold text-foreground">Summary & Q&A</h2>
+                <p className="text-sm text-muted-foreground">Your analysis is ready. Ask follow-up questions or start a new summary.</p>
+              </div>
+              <button
+                onClick={resetForNewDocument}
+                className="px-4 py-2 bg-gradient-to-r from-primary to-secondary text-foreground rounded-xl font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-200"
+              >
+                Summarize New Document
+              </button>
+
+            </div>
+          )}
+
+          {/* Analysis & Chat Grid */}
+          {summary && (
+            <div className="grid lg:grid-cols-5 gap-6 h-[60vh]">
+              {/* Analysis Results */}
+             
+
+              {/* Chat Interface */}
+              <div className="lg:col-span-3 flex flex-col h-[60vh]">
+                <div className="bg-card/40 backdrop-blur-xl rounded-2xl border border-border/50 overflow-hidden flex flex-col h-full">
+                  <div className="p-6 border-b border-border/50 bg-gradient-to-r from-primary/5 to-secondary/5 flex-shrink-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
+                        <MessageCircle className="w-5 h-5 text-foreground" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-foreground">Ask Questions</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Chat with AI about your document</p>
+                  </div>
+
+                  {/* Messages */}
+                  <div className="flex-1 overflow-y-auto p-6 pt-8 space-y-4 custom-scrollbar">
+                    {chatHistory.map((message) => (
+                      <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'User' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                        {message.sender !== 'User' && (
+                          <div className="w-8 h-8 rounded-full bg-card flex items-center justify-center flex-shrink-0">
+                            <Bot className="w-5 h-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className={`max-w-[80%]`}>
+                          <div className={`rounded-2xl px-4 py-3 ${
+                            message.sender === 'User' ? 'bg-gradient-to-br from-primary to-secondary text-foreground shadow-lg shadow-primary/20' : 'bg-card/50 text-foreground border border-border/50'
+                          }`}>
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.message}</p>
+                          </div>
+                        </div>
+                        {message.sender === 'User' && (
+                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                            <User className="w-5 h-5 text-foreground" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {loading && (
+                      <div className="flex justify-start">
+                        <div className="bg-card/50 border border-border/50 px-4 py-3 rounded-2xl flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                          <span className="text-sm text-muted-foreground">Thinking...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Input */}
+                  <div className="p-6 border-t border-border/50 bg-card/30 flex-shrink-0">
+                    <div className="flex gap-3">
+                      <input
+                        type="text"
+                        value={chatMessage}
+                        onChange={(e) => setChatMessage(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Ask anything about your document..."
+                        disabled={!sessionId || loading}
+                        className="flex-1 px-4 py-3 bg-card/50 border border-border/50 rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                      />
+                      <button
+                        onClick={handleSendMessage}
+                        disabled={!sessionId || !chatMessage.trim() || loading}
+                        className="px-6 py-3 bg-gradient-to-r from-primary to-secondary text-foreground rounded-xl font-medium hover:shadow-lg hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
+                      >
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Send className="w-5 h-5" /><span>Send</span></>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+               <div className="lg:col-span-2 flex flex-col min-h-0">
+                <div className="bg-card/40 backdrop-blur-xl rounded-2xl border border-border/50 overflow-hidden flex flex-col">
+                  <div className="p-6 border-b border-border/50 bg-gradient-to-r from-primary/5 to-secondary/5 flex-shrink-0">
+                    <div className="flex items-center justify-between mb-2"> {/* Added justify-between here */}
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
+                          <Bot className="w-5 h-5 text-foreground" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-foreground">Analysis</h3>
+                      </div>
+                      <button
+                        onClick={handleCopySummary}
+                        className="px-3 py-1.5 bg-gradient-to-r from-primary to-secondary text-foreground rounded-lg font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 flex items-center gap-2 text-sm"
+                      >
+                        {isSummaryCopied ? (
+                          <>
+                            <Check className="w-4 h-4" />
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-4 h-4" />
+                            <span>Copy Analysis</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-sm text-muted-foreground">AI-generated insights</p>
+                  </div>
+                  <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
+                    <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap mb-4">{summary}</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
-        </div>
-
-        {/* Toggle Sidebar Button (when closed) */}
-        {!sidebarOpen && (
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="fixed left-0 top-1/2 -translate-y-1/2 bg-blue-600 text-white p-2 rounded-r-lg shadow-lg hover:bg-blue-700 transition-colors z-10"
-          >
-            <History className="w-5 h-5" />
-          </button>
-        )}
-
-        {/* Main Content */}
-        <div className={`flex-1 transition-all duration-300`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header Section */}
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center mb-4">
-            <FileText className="w-8 h-8 text-blue-600 mr-3" />
-            <h1 className="text-4xl font-bold text-gray-900">AI Document Analyser</h1>
-          </div>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Upload your legal document and get instant AI-powered analysis, risk assessment, and plain English explanations of complex legal terms.
-          </p>
-        </div>
-
-        {/* Main Content Cards */}
-        <div className="grid lg:grid-cols-2 gap-8 mb-12">
-          {/* Upload Document Card */}
-          <div className="bg-white rounded-2xl shadow-lg p-8">
-            <div className="flex items-center mb-6">
-              <Upload className="w-6 h-6 text-blue-600 mr-3" />
-              <h2 className="text-2xl font-bold text-gray-900">Upload Document</h2>
-            </div>
-            
-            <div
-              className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-blue-500 transition-colors cursor-pointer"
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onClick={() => document.getElementById('file-upload').click()}
-            >
-              <input
-                id="file-upload"
-                type="file"
-                accept=".pdf,.docx,.txt"
-                onChange={handleFileUpload}
-                className="hidden"
-                disabled={uploading}
-              />
-              
-              <div className="flex flex-col items-center">
-                {uploading ? (
-                  <>
-                    <Loader2 className="w-16 h-16 text-blue-600 mb-4 animate-spin" />
-                    <p className="text-lg font-medium text-gray-700 mb-2">
-                      Uploading and analyzing document...
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <FileText className="w-16 h-16 text-gray-400 mb-4" />
-                    <p className="text-lg font-medium text-gray-700 mb-2">
-                      Drag and drop your legal document here
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      or click to browse files (PDF, DOCX, TXT)
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {error && (
-              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-800 text-sm">{error}</p>
-              </div>
-            )}
-
-            {uploadedFile && !uploading && (
-              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-center">
-                  <FileText className="w-5 h-5 text-green-600 mr-2" />
-                  <span className="text-green-800 font-medium">{uploadedFile.name}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* AI Analysis Results Card */}
-          <div className="bg-white rounded-2xl shadow-lg p-8">
-            <div className="flex items-center mb-6">
-              <Bot className="w-6 h-6 text-blue-600 mr-3" />
-              <h2 className="text-2xl font-bold text-gray-900">AI Analysis Results</h2>
-            </div>
-            
-            {summary ? (
-              <div className="max-h-64 overflow-y-auto">
-                <div className="prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{summary}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
-                <Search className="w-20 h-20 text-gray-300 mb-4" />
-                <p className="text-gray-500 text-lg">
-                  Upload a document to see AI-powered analysis results here
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Chat Interface */}
-        <div className="bg-white rounded-2xl shadow-lg p-8">
-          <div className="flex items-center mb-6">
-            <MessageCircle className="w-6 h-6 text-blue-600 mr-3" />
-            <h2 className="text-2xl font-bold text-gray-900">Ask Questions About Your Document</h2>
-          </div>
-
-          {/* Chat Messages */}
-          <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
-            {chatHistory.length > 0 ? (
-              chatHistory.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.sender === 'User' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg ${
-                      message.sender === 'User'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-800'
-                    }`}
-                  >
-                    <p className="text-sm whitespace-pre-wrap">{message.message}</p>
-                    <p className={`text-xs mt-1 ${
-                      message.sender === 'User' ? 'text-blue-100' : 'text-gray-500'
-                    }`}>
-                      {message.timestamp}
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center text-gray-500 py-8">
-                Upload and analyze a document to start chatting
-              </div>
-            )}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="bg-gray-200 text-gray-800 px-4 py-3 rounded-lg">
-                  <Loader2 className="w-5 h-5 animate-spin inline mr-2" />
-                  <span className="text-sm">Thinking...</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Chat Input */}
-          <div className="flex space-x-4">
-            <input
-              type="text"
-              value={chatMessage}
-              onChange={(e) => setChatMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={sessionId ? "Ask me anything about your document...." : "Upload a document first..."}
-              disabled={!sessionId || loading}
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={!sessionId || !chatMessage.trim() || loading}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <>
-                  <Send className="w-5 h-5" />
-                  <span>Send</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-          </div>
         </div>
       </div>
     </div>

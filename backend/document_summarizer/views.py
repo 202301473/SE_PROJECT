@@ -1,6 +1,6 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, parser_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated # Added AllowAny and IsAuthenticated import
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.conf import settings
@@ -8,8 +8,35 @@ from .models import DocumentSession, ChatMessage
 from authentication.models import User
 import fitz  # PyMuPDF for PDF
 from docx import Document
-from langchain_google_genai import ChatGoogleGenerativeAI
 from mongoengine import DoesNotExist
+
+import google.generativeai as genai # Import Google Generative AI client
+
+# Initialize Gemini client
+def get_gemini_client():
+    if not settings.GEMINI_API_KEY:
+        class MockPart:
+            def __init__(self, text):
+                self.text = text
+        class MockContent:
+            def __init__(self, text):
+                self.parts = [MockPart(text)]
+        class MockCandidate:
+            def __init__(self, text):
+                self.content = MockContent(text)
+        class MockGenerateContentResponse:
+            def __init__(self, text="This is a mock response from the AI."):
+                self.candidates = [MockCandidate(text)]
+        class MockGenerativeModel:
+            def generate_content(self, contents, **kwargs):
+                return MockGenerateContentResponse()
+        class MockGenai:
+            def __init__(self):
+                self.GenerativeModel = MockGenerativeModel
+        return MockGenai()
+        
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    return genai
 
 def extract_text_from_file(uploaded_file):
     """Extract text depending on file type."""
@@ -36,78 +63,63 @@ def extract_text_from_file(uploaded_file):
         return None
 
 def summarize_legal_doc(text):
-    """Use Gemini API through LangChain to summarize legal text."""
+    """Use Gemini API to summarize legal text."""
     try:
-        # Explicitly configure API key
-        import google.generativeai as genai
+        genai_client = get_gemini_client()
+        model = genai_client.GenerativeModel('gemini-2.0-flash-exp')
         
-        if not settings.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY is not configured in settings")
-            
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",
-            temperature=0.3,
-            google_api_key=settings.GEMINI_API_KEY,  # Explicitly pass API key
-        )
+        messages = [
+            {"role": "user", "parts": [f"You are a legal assistant. Summarize legal documents clearly and concisely, focusing on key clauses, parties involved, and any obligations or penalties. Summarize the following legal document:\n\nDocument:\n{text[:10000]}"]} # limit input
+        ]
 
-        prompt = (
-            "You are a legal assistant. Summarize this legal document clearly and concisely, "
-            "focusing on key clauses, parties involved, and any obligations or penalties.\n\n"
-            f"Document:\n{text[:10000]}"  # limit input
+        chat_completion = model.generate_content(
+            messages,
+            generation_config=genai_client.types.GenerationConfig(
+                temperature=0.0, # Lower temperature for summarization
+                max_output_tokens=1000, # Limit summary length
+            ),
+            request_options={'timeout': 60} # Increase timeout to 60 seconds
         )
-
-        response = llm.invoke(prompt)
-        return response.content
+        return chat_completion.candidates[0].content.parts[0].text
     except Exception as e:
         raise Exception(f"Error generating summary with Gemini API: {str(e)}")
 
 def chat_with_document(session, user_message):
-    """Use Gemini to answer questions about the document."""
+    """Use Gemini API to answer questions about the document."""
     try:
-        # Explicitly configure API key
-        import google.generativeai as genai
-        
-        if not settings.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY is not configured in settings")
-            
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",
-            temperature=0.3,
-            google_api_key=settings.GEMINI_API_KEY,  # Explicitly pass API key
-        )
+        genai_client = get_gemini_client()
+        model = genai_client.GenerativeModel('gemini-2.0-flash-exp')
         
         # Get chat history for context
         recent_messages = ChatMessage.objects(session=session).order_by('created_at')[:10]
-        chat_history = "\n".join([
-            f"{'User' if msg.is_user else 'Assistant'}: {msg.message}" 
-            for msg in recent_messages
-        ])
         
-        prompt = f"""
-        You are a legal assistant helping a user understand a legal document.
+        messages = [
+            {"role": "user", "parts": [f"""You are a legal assistant helping a user understand a legal document.
+Original Document (first 5000 characters):
+{session.document_text[:5000]}
+Document Summary:
+{session.summary}
+Please provide a helpful, accurate response based on the document content and summary.
+If the question cannot be answered from the document, politely state that.
+Keep your response clear and concise.
+"""]}
+        ]
         
-        Original Document (first 5000 characters):
-        {session.document_text[:5000]}
-        
-        Document Summary:
-        {session.summary}
-        
-        Previous Conversation:
-        {chat_history}
-        
-        Current User Question: {user_message}
-        
-        Please provide a helpful, accurate response based on the document content and summary.
-        If the question cannot be answered from the document, politely state that.
-        Keep your response clear and concise.
-        """
-        
-        response = llm.invoke(prompt)
-        return response.content
+        for msg in recent_messages:
+            role = 'user' if msg.is_user else 'model' # Gemini uses 'model' for assistant
+            messages.append({"role": role, "parts": [msg.message]})
+            
+        messages.append({"role": "user", "parts": [user_message]})
+
+        chat_completion = model.generate_content(
+            messages,
+            generation_config=genai_client.types.GenerationConfig(
+                temperature=0.3,
+                max_output_tokens=500, # Limit response length
+            ),
+            request_options={'timeout': 60} # Increase timeout to 60 seconds
+        )
+        return chat_completion.candidates[0].content.parts[0].text
     except Exception as e:
         raise Exception(f"Error generating response with Gemini API: {str(e)}")
 

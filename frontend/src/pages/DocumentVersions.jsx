@@ -4,6 +4,8 @@ import axios from '../api/axios';
 import { FileText, Download, History } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { saveAs } from 'file-saver';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/Components/ui/Card';
+import { Button } from '@/Components/ui/Button';
 
 const DocumentVersions = () => {
   const { id } = useParams(); // conversation ID
@@ -16,7 +18,7 @@ const DocumentVersions = () => {
   useEffect(() => {
     const fetchDocumentVersions = async () => {
       try {
-        const response = await axios.get(`documents/conversations/${id}/`);
+        const response = await axios.get(`api/documents/conversations/${id}/`);
         setDocumentTitle(response.data.title || 'Document');
         setVersions(response.data.document_versions || []);
       } catch (err) {
@@ -66,43 +68,59 @@ const DocumentVersions = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+    <div className="min-h-screen py-8 animate-fade-in">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 text-center">
-          <div className="flex items-center justify-center mb-4">
-            <History className="w-10 h-10 text-blue-600 mr-3" />
-            <h1 className="text-4xl font-bold text-gray-900">Document Versions</h1>
+        <div className="mb-8 text-center">
+          <div className="inline-flex items-center gap-2 mb-3 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">
+            <History className="w-4 h-4 text-blue-400" />
+            <span className="text-blue-400 text-xs font-medium">Version History</span>
           </div>
-          <p className="text-xl text-gray-600">Viewing versions for: <span className="font-semibold">{documentTitle}</span></p>
+          <h1 className="text-4xl font-bold text-white mb-2">
+            Document Versions
+          </h1>
+          <p className="text-gray-400">
+            Viewing versions for: <span className="font-medium text-blue-400">{documentTitle}</span>
+          </p>
         </div>
 
         {versions.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-xl p-8 text-center text-gray-500 text-lg">
-            No versions found for this document.
+          <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-12 text-center">
+            <History className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+            <p className="text-gray-400">No versions found for this document.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {versions.map((version) => (
-              <div key={version.version_number} className="bg-white rounded-2xl shadow-xl p-6 flex items-center justify-between border border-gray-200 hover:border-blue-400 transition-all duration-200">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-800 mb-1">Version {version.version_number}</h2>
-                  <p className="text-gray-500 text-sm">Created: {new Date(version.timestamp).toLocaleDateString()} {new Date(version.timestamp).toLocaleTimeString()}</p>
-                </div>
-                <button
-                  onClick={() => handleDownloadVersionPdf(version.version_number)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2 text-sm"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download PDF</span>
-                </button>
-                <button
-                  onClick={() => navigate(`/document-creation/${id}?version=${version.version_number}`)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 text-sm"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>Edit Version</span>
-                </button>
-              </div>
+          <div className="grid grid-cols-1 gap-3">
+            {versions.map((version, index) => (
+              <Card 
+                key={version.version_number} 
+                className="bg-gray-800/40 backdrop-blur-sm border border-gray-700/50 hover:border-gray-600 transition-all duration-200 animate-fade-in-up"
+                style={{ animationDelay: `${index * 0.05}s` }}
+              >
+                <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <h2 className="text-lg font-semibold text-white mb-1">Version {version.version_number}</h2>
+                    <p className="text-gray-400 text-xs">
+                      Created: {new Date(version.timestamp).toLocaleDateString()} {new Date(version.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleDownloadVersionPdf(version.version_number)}
+                      className="bg-green-600 hover:bg-green-700 text-white transition-colors duration-200 text-sm"
+                    >
+                      <Download className="w-3.5 h-3.5 mr-1.5" />
+                      <span>PDF</span>
+                    </Button>
+                    <Button
+                      onClick={() => navigate(`/document-creation/${id}?version=${version.version_number}`)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200 text-sm"
+                    >
+                      <FileText className="w-3.5 h-3.5 mr-1.5" />
+                      <span>Edit</span>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}

@@ -228,20 +228,34 @@ def profile_detail_update_view(request):
         return Response(serializer.data, status=status.HTTP_200_OK)
         
     elif request.method == 'PATCH':
+        data = request.data.copy() # Make a mutable copy of request.data
+        
         # Handle profile picture upload
         profile_picture_file = request.FILES.get('profile_picture')
         if profile_picture_file:
             try:
                 # Upload to Cloudinary
                 upload_result = cloudinary.uploader.upload(profile_picture_file)
-                user.profile_picture = upload_result['secure_url']
+                data['profile_picture'] = upload_result['secure_url'] # Add the URL to the data for the serializer
             except Exception as e:
                 return Response({
                     'error': f'Failed to upload profile picture: {str(e)}'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Handle cover photo upload
+        cover_photo_file = request.FILES.get('cover_photo')
+        if cover_photo_file:
+            try:
+                # Upload to Cloudinary
+                upload_result = cloudinary.uploader.upload(cover_photo_file)
+                data['cover_photo'] = upload_result['secure_url'] # Add the URL to the data for the serializer
+            except Exception as e:
+                return Response({
+                    'error': f'Failed to upload cover photo: {str(e)}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         # Handle other profile data (e.g., name)
-        serializer = UserProfileSerializer(user, data=request.data, partial=True)
+        serializer = UserProfileSerializer(user, data=data, partial=True) # Pass the modified data
         if serializer.is_valid():
             serializer.save()
             return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
