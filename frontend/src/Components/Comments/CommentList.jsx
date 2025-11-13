@@ -92,7 +92,7 @@ const CommentList = ({ documentId }) => {
   return (
     <div className="comment-section bg-card/40 p-4 rounded-lg shadow-md">
       <h3 className="text-xl font-bold mb-4 text-foreground">Comments</h3>
-      <CommentForm documentId={documentId} />
+      <CommentForm documentId={documentId} onCommentAdded={fetchComments} />
       <div className="comments-list mt-6 overflow-y-auto custom-scrollbar">
         {comments.length === 0 ? (
           <p className="text-muted-foreground">No comments.</p>

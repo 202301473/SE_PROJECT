@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import JSONParser
 
-from documents.mongo_client import get_all_conversations, get_conversation_by_id, save_conversation, update_conversation, delete_conversation, get_document_version_content, delete_document_version
+from documents.mongo_client import get_all_conversations, get_conversation_by_id, save_conversation, update_conversation, delete_conversation, get_document_version_content, delete_document_version, update_share_permissions
 from channels.layers import get_channel_layer # Import get_channel_layer
 from asgiref.sync import async_to_sync # Import async_to_sync
 
@@ -64,28 +64,46 @@ def document_comments(request, document_id):
 @api_view(['POST'])
 def generate_share_link(request):
     """
-    Generates a shareable link for a document, even if it's not saved.
+    Generates a shareable link for a document.
+    If a document_id is provided, it updates the share permissions of the existing document.
+    Otherwise, it creates a new document with the provided content.
     """
-    document_content = request.data.get('document_content')
-    title = request.data.get('title', 'Shared Document')
-    
-    if not document_content:
-        return Response({'error': 'Document content is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        # Create a temporary conversation with the document
-        conversation_id = save_conversation(
-            title=title,
-            messages=[],
-            initial_document_content=document_content,
-            uploaded_by=(request.user.username if request.user.is_authenticated else 'anonymous'),
-            notes='Shared document'
-        )
-        
-        share_url = f"/documentShare/{conversation_id}" # Updated to match frontend route
-        return Response({'share_url': share_url}, status=status.HTTP_201_CREATED)
-    except Exception as e:
-        return Response({'error': f'Error generating share link: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    document_id = request.data.get('document_id')
+    permission_level = request.data.get('permission_level', 'view')
+    share_permissions = {'permission_level': permission_level}
+
+    if document_id:
+        # Update existing document
+        try:
+            success = update_share_permissions(document_id, share_permissions)
+            if success:
+                share_url = f"/documentShare/{document_id}"
+                return Response({'share_url': share_url}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': 'Failed to update share permissions'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({'error': f'Error generating share link: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    else:
+        # Create new document
+        document_content = request.data.get('document_content')
+        title = request.data.get('title', 'Shared Document')
+
+        if not document_content:
+            return Response({'error': 'Document content is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            conversation_id = save_conversation(
+                title=title,
+                messages=[],
+                initial_document_content=document_content,
+                uploaded_by=(request.user.username if request.user.is_authenticated else 'anonymous'),
+                notes='Shared document',
+                share_permissions=share_permissions
+            )
+            share_url = f"/documentShare/{conversation_id}"
+            return Response({'share_url': share_url}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': f'Error generating share link: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET', 'POST'])
@@ -113,7 +131,13 @@ def conversation_list(request):
         if not title or not messages:
             return Response({'error': 'Title and messages are required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        conversation_id = save_conversation(title, messages, initial_document_content, uploaded_by=(request.user.username if request.user.is_authenticated else 'anonymous'), notes=notes)
+        conversation_id = save_conversation(
+            title=title,
+            messages=messages,
+            initial_document_content=initial_document_content,
+            uploaded_by=(request.user.username if request.user.is_authenticated else 'anonymous'),
+            notes=notes
+        )
         if conversation_id:
             return Response({'id': conversation_id}, status=status.HTTP_201_CREATED)
         else:
@@ -132,6 +156,20 @@ def conversation_detail(request, pk):
             return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
     
     elif request.method == 'PUT':
+        conversation = get_conversation_by_id(pk)
+        if not conversation:
+            return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check for share permissions
+        share_permissions = conversation.get('share_permissions')
+        if share_permissions is None:
+            share_permissions = {}
+        permission_level = share_permissions.get('permission_level')
+
+        # If the user is not authenticated, only allow updates if the permission level is 'edit'
+        if not request.user.is_authenticated and permission_level != 'edit':
+            return Response({'error': 'You do not have permission to edit this document.'}, status=status.HTTP_403_FORBIDDEN)
+
         title = request.data.get('title')
         messages = request.data.get('messages')
         new_document_content = request.data.get('new_document_content')

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { User, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from '../../context/AuthContext'; // Import useAuth
@@ -8,7 +8,6 @@ export default function Navbar() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const profileMenuRef = useRef(null);
-  const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth(); // Use AuthContext
 
   useEffect(() => {
@@ -28,16 +27,13 @@ export default function Navbar() {
     { to: "/", label: "Home" },
     { to: "/document-analyser", label: "Document Analyzer" },
     { to: "/document-creation", label: "Document Generator" },
-    { to: "/my-documents", label: "My Documents" },
+    { to: "/lawyer-connect", label: "Connect" },
+    { to: "/my-documents", label: "My Documents", requiresAuth: true },
   ];
 
-  const handleProtectedNavClick = (path) => {
-    if (!isAuthenticated) { // Use isAuthenticated from AuthContext
-      navigate("/auth/signin");
-    } else {
-      navigate(path);
-    }
-  };
+  if (isAuthenticated && user?.role === 'lawyer') {
+    navLinks.push({ to: "/lawyer-dashboard", label: "Lawyer Dashboard", requiresAuth: true });
+  }
 
   return (
     <nav className="bg-background/80 backdrop-blur-md sticky top-0 z-50 border-b py-4 border-border shadow-lg shadow-black/20 h-[var(--navbar-height)]">
@@ -50,14 +46,16 @@ export default function Navbar() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-2">
             {navLinks.map((link, index) => (
-              <Link 
-                to={link.to} 
-                key={index} 
-                className="text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg hover:bg-foreground/5 transition-all duration-200 relative group"
-              >
-                {link.label}
-                <span className="absolute bottom-1 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300"></span>
-              </Link>
+              ((!link.requiresAuth) || isAuthenticated) && (
+                <Link 
+                  to={link.to} 
+                  key={index} 
+                  className="text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg hover:bg-foreground/5 transition-all duration-200 relative group"
+                >
+                  {link.label}
+                  <span className="absolute bottom-1 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300"></span>
+                </Link>
+              )
             ))}
           </div>
 
@@ -118,14 +116,16 @@ export default function Navbar() {
             <X size={24} />
           </button>
           {navLinks.map((link, index) => (
-            <Link 
-              to={link.to} 
-              key={index} 
-              className="text-3xl font-bold text-foreground hover:text-primary transition-colors duration-200"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              {link.label}
-            </Link>
+            ((!link.requiresAuth) || isAuthenticated) && (
+              <Link 
+                to={link.to} 
+                key={index} 
+                className="text-3xl font-bold text-foreground hover:text-primary transition-colors duration-200"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {link.label}
+              </Link>
+            )
           ))}
           {isAuthenticated ? (
             <>

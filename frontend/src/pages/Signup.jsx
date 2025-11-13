@@ -8,12 +8,23 @@ import { Label } from "@/Components/ui/Label";
 
 const Signup = () => {
   const navigate = useNavigate();
+  const [accountType, setAccountType] = useState('client');
   const [formData, setFormData] = useState({
     name: '',
     username: '',
     email: '',
     password: '',
-    password2: ''
+    password2: '',
+    phone: '',
+    license_number: '',
+    bar_council_id: '',
+    education: '',
+    experience_years: '',
+    law_firm: '',
+    specializations: '',
+    consultation_fee: '',
+    bio: '',
+    verification_documents: ''
   });
   const [loading, setLoading] = useState(false);
 
@@ -35,7 +46,34 @@ const Signup = () => {
     }
 
     try {
-      const response = await axios.post('api/auth/signup/', formData);
+      const payload = {
+        ...formData,
+        role: accountType,
+      };
+
+      if (accountType === 'lawyer') {
+        payload.experience_years = formData.experience_years ? Number(formData.experience_years) : 0;
+        payload.specializations = formData.specializations
+          ? formData.specializations.split(',').map(item => item.trim()).filter(Boolean)
+          : [];
+        payload.verification_documents = formData.verification_documents
+          ? formData.verification_documents.split(',').map(item => item.trim()).filter(Boolean)
+          : [];
+      } else {
+        [
+          'license_number',
+          'bar_council_id',
+          'education',
+          'experience_years',
+          'law_firm',
+          'specializations',
+          'consultation_fee',
+          'bio',
+          'verification_documents',
+        ].forEach((field) => delete payload[field]);
+      }
+
+      const response = await axios.post('api/auth/signup/', payload);
       toast.success(response.data.message);
       if (response.data.requires_verification) {
         navigate('/verify-otp', { state: { email: response.data.email } });
@@ -77,6 +115,27 @@ const Signup = () => {
             Create an account
           </h1>
           <p className="text-muted-foreground">Enter your information to create an account</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant={accountType === 'client' ? 'default' : 'outline'}
+            className="w-full"
+            onClick={() => setAccountType('client')}
+            disabled={loading}
+          >
+            I'm a client
+          </Button>
+          <Button
+            type="button"
+            variant={accountType === 'lawyer' ? 'default' : 'outline'}
+            className="w-full"
+            onClick={() => setAccountType('lawyer')}
+            disabled={loading}
+          >
+            I'm a lawyer
+          </Button>
         </div>
 
         <Button 
@@ -174,6 +233,156 @@ const Signup = () => {
               className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
             />
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phone" className="text-foreground font-medium">Phone (optional)</Label>
+            <Input
+              id="phone"
+              name="phone"
+              placeholder="+91-XXXXXXXXXX"
+              value={formData.phone}
+              onChange={handleInputChange}
+              disabled={loading}
+              className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+            />
+          </div>
+
+          {accountType === 'lawyer' && (
+            <div className="space-y-6 border border-border/60 rounded-xl p-4 bg-card/40">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Professional Information</h2>
+                <p className="text-xs text-muted-foreground">
+                  Provide accurate information so our team can verify your credentials.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="license_number" className="text-foreground font-medium">License Number *</Label>
+                  <Input
+                    id="license_number"
+                    name="license_number"
+                    placeholder="State Bar License Number"
+                    required={accountType === 'lawyer'}
+                    value={formData.license_number}
+                    onChange={handleInputChange}
+                    disabled={loading}
+                    className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bar_council_id" className="text-foreground font-medium">Bar Council ID *</Label>
+                  <Input
+                    id="bar_council_id"
+                    name="bar_council_id"
+                    placeholder="Bar Council Registration ID"
+                    required={accountType === 'lawyer'}
+                    value={formData.bar_council_id}
+                    onChange={handleInputChange}
+                    disabled={loading}
+                    className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="education" className="text-foreground font-medium">Education</Label>
+                  <Input
+                    id="education"
+                    name="education"
+                    placeholder="LLB, LLM..."
+                    value={formData.education}
+                    onChange={handleInputChange}
+                    disabled={loading}
+                    className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="experience_years" className="text-foreground font-medium">Years of Experience</Label>
+                  <Input
+                    id="experience_years"
+                    name="experience_years"
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 5"
+                    value={formData.experience_years}
+                    onChange={handleInputChange}
+                    disabled={loading}
+                    className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="law_firm" className="text-foreground font-medium">Law Firm / Practice</Label>
+                  <Input
+                    id="law_firm"
+                    name="law_firm"
+                    placeholder="Firm name or Independent"
+                    value={formData.law_firm}
+                    onChange={handleInputChange}
+                    disabled={loading}
+                    className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="consultation_fee" className="text-foreground font-medium">Consultation Fee</Label>
+                  <Input
+                    id="consultation_fee"
+                    name="consultation_fee"
+                    placeholder="e.g. ₹1500/hour"
+                    value={formData.consultation_fee}
+                    onChange={handleInputChange}
+                    disabled={loading}
+                    className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="specializations" className="text-foreground font-medium">Specializations</Label>
+                <Input
+                  id="specializations"
+                  name="specializations"
+                  placeholder="Separate with commas e.g. Corporate Law, Family Law"
+                  value={formData.specializations}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bio" className="text-foreground font-medium">Professional Bio</Label>
+                <textarea
+                  id="bio"
+                  name="bio"
+                  rows="4"
+                  placeholder="Describe your experience, notable cases, or approach to clients."
+                  value={formData.bio}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  className="w-full rounded-md border border-border/50 bg-input text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 p-3"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="verification_documents" className="text-foreground font-medium">Verification Documents</Label>
+                <Input
+                  id="verification_documents"
+                  name="verification_documents"
+                  placeholder="Links to certifications or proofs (comma separated URLs)"
+                  value={formData.verification_documents}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                />
+              </div>
+            </div>
+          )}
+
           <Button 
             type="submit" 
             className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-foreground shadow-lg shadow-primary/50 hover:shadow-xl hover:shadow-primary/60 transition-all duration-300" 

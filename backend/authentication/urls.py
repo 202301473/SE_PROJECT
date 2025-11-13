@@ -7,7 +7,12 @@ from .views import (
     logout_view,
     verify_otp_view,
     resend_otp_view,
-    profile_detail_update_view # Import the combined view
+    profile_detail_update_view, # Import the combined view
+    lawyer_list_view,
+    lawyer_detail_view,
+    connect_with_lawyer_view,
+    lawyer_dashboard_view,
+    lawyer_connection_update_view,
 )
 
 urlpatterns = [
@@ -19,4 +24,9 @@ urlpatterns = [
     path('profile/', profile_detail_update_view, name='profile'), # Use the combined view
     path('logout/', logout_view, name='logout'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('lawyers/', lawyer_list_view, name='lawyer_list'),
+    path('lawyers/<str:lawyer_id>/', lawyer_detail_view, name='lawyer_detail'),
+    path('lawyers/<str:lawyer_id>/connect/', connect_with_lawyer_view, name='connect_lawyer'),
+    path('lawyer/dashboard/', lawyer_dashboard_view, name='lawyer_dashboard'),
+    path('lawyer/connections/<str:connection_id>/', lawyer_connection_update_view, name='lawyer_connection_update'),
 ]

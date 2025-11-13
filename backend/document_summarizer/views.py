@@ -66,7 +66,7 @@ def summarize_legal_doc(text):
     """Use Gemini API to summarize legal text."""
     try:
         genai_client = get_gemini_client()
-        model = genai_client.GenerativeModel('gemini-2.0-flash-exp')
+        model = genai_client.GenerativeModel('gemini-flash-lite-latest')
         
         messages = [
             {"role": "user", "parts": [f"You are a legal assistant. Summarize legal documents clearly and concisely, focusing on key clauses, parties involved, and any obligations or penalties. Summarize the following legal document:\n\nDocument:\n{text[:10000]}"]} # limit input
@@ -88,7 +88,7 @@ def chat_with_document(session, user_message):
     """Use Gemini API to answer questions about the document."""
     try:
         genai_client = get_gemini_client()
-        model = genai_client.GenerativeModel('gemini-2.0-flash-exp')
+        model = genai_client.GenerativeModel('gemini-flash-lite-latest')
         
         # Get chat history for context
         recent_messages = ChatMessage.objects(session=session).order_by('created_at')[:10]

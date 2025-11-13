@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, LawyerProfile, LawyerConnectionRequest
 from django.contrib.auth.password_validation import validate_password
 
 class UserSerializer(serializers.Serializer):
@@ -23,7 +23,12 @@ class UserSerializer(serializers.Serializer):
             'profile_picture': instance.profile_picture,
             'cover_photo': instance.cover_photo, # Added cover_photo
             'auth_provider': instance.auth_provider,
-            'date_joined': instance.date_joined
+            'date_joined': instance.date_joined,
+            'phone': instance.phone,
+            'role': instance.role,
+            'is_verified': instance.is_verified,
+            'is_lawyer_verified': instance.is_lawyer_verified,
+            'lawyer_verification_status': instance.lawyer_verification_status
         }
 
 class RegisterSerializer(serializers.Serializer):
@@ -33,6 +38,25 @@ class RegisterSerializer(serializers.Serializer):
     name = serializers.CharField(required=False, allow_blank=True, max_length=255)
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
+    role = serializers.ChoiceField(choices=[('client', 'Client'), ('lawyer', 'Lawyer')], default='client')
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    license_number = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    bar_council_id = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    education = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    experience_years = serializers.IntegerField(required=False, min_value=0)
+    law_firm = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    specializations = serializers.ListField(
+        child=serializers.CharField(max_length=120),
+        required=False,
+        allow_empty=True
+    )
+    consultation_fee = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    bio = serializers.CharField(required=False, allow_blank=True)
+    verification_documents = serializers.ListField(
+        child=serializers.CharField(max_length=512),
+        required=False,
+        allow_empty=True
+    )
     
     def validate_email(self, value):
         """Check if email already exists"""
@@ -46,21 +70,91 @@ class RegisterSerializer(serializers.Serializer):
             raise serializers.ValidationError("A user with this username already exists.")
         return value
     
+    def validate_specializations(self, value):
+        if isinstance(value, str):
+            items = [item.strip() for item in value.split(',') if item.strip()]
+            return items
+        return value or []
+
+    def validate_verification_documents(self, value):
+        if isinstance(value, str):
+            items = [item.strip() for item in value.split(',') if item.strip()]
+            return items
+        return value or []
+
+    def validate_experience_years(self, value):
+        if value in (None, ''):
+            return 0
+        return value
+
     def validate(self, attrs):
         """Validate password match"""
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
+        
+        role = attrs.get('role', 'client')
+        if role == 'lawyer':
+            missing_fields = []
+            mandatory_fields = {
+                'license_number': attrs.get('license_number', '').strip(),
+                'bar_council_id': attrs.get('bar_council_id', '').strip(),
+            }
+            if not mandatory_fields['license_number']:
+                missing_fields.append('license_number')
+            if not mandatory_fields['bar_council_id']:
+                missing_fields.append('bar_council_id')
+            if missing_fields:
+                raise serializers.ValidationError({
+                    field: 'This field is required for lawyer registration.' for field in missing_fields
+                })
         return attrs
     
     def create(self, validated_data):
         """Create new user"""
         validated_data.pop('password2')
+        role = validated_data.pop('role', 'client')
+        phone = validated_data.pop('phone', '')
+        license_number = validated_data.pop('license_number', '')
+        bar_council_id = validated_data.pop('bar_council_id', '')
+        education = validated_data.pop('education', '')
+        experience_years = validated_data.pop('experience_years', 0)
+        law_firm = validated_data.pop('law_firm', '')
+        specializations = validated_data.pop('specializations', []) or []
+        consultation_fee = validated_data.pop('consultation_fee', '')
+        bio = validated_data.pop('bio', '')
+        verification_documents = validated_data.pop('verification_documents', []) or []
+
         user = User.create_user(
             email=validated_data['email'],
             username=validated_data['username'],
             name=validated_data.get('name', ''),
-            password=validated_data['password']
+            password=validated_data['password'],
+            role=role,
+            phone=phone,
         )
+
+        if role == 'lawyer':
+            user.lawyer_verification_status = 'pending'
+            user.is_lawyer_verified = False
+            user.save()
+            LawyerProfile.objects(user=user).delete()
+            LawyerProfile.objects.create(
+                user=user,
+                phone=phone,
+                education=education,
+                experience_years=experience_years or 0,
+                law_firm=law_firm,
+                specializations=specializations,
+                license_number=license_number,
+                bar_council_id=bar_council_id,
+                consultation_fee=consultation_fee,
+                bio=bio,
+                verification_documents=verification_documents,
+                verification_status='pending',
+            )
+        else:
+            user.lawyer_verification_status = 'not_applicable'
+            user.save()
         return user
 
 class LoginSerializer(serializers.Serializer):
@@ -89,3 +183,76 @@ class UserProfileSerializer(serializers.Serializer):
         instance.cover_photo = validated_data.get('cover_photo', instance.cover_photo) # Added cover_photo
         instance.save()
         return instance
+
+
+class LawyerProfileSerializer(serializers.Serializer):
+    """Serializer for lawyer public profile"""
+
+    id = serializers.CharField(read_only=True)
+    user = UserSerializer(read_only=True)
+    phone = serializers.CharField(read_only=True)
+    education = serializers.CharField(read_only=True)
+    experience_years = serializers.IntegerField(read_only=True)
+    law_firm = serializers.CharField(read_only=True)
+    specializations = serializers.ListField(child=serializers.CharField(), read_only=True)
+    license_number = serializers.CharField(read_only=True)
+    bar_council_id = serializers.CharField(read_only=True)
+    consultation_fee = serializers.CharField(read_only=True)
+    bio = serializers.CharField(read_only=True)
+    verification_status = serializers.CharField(read_only=True)
+    verification_notes = serializers.CharField(read_only=True)
+
+    def to_representation(self, instance):
+        user_data = UserSerializer(instance.user).data if instance.user else None
+        return {
+            'id': str(instance.id),
+            'user': user_data,
+            'phone': instance.phone,
+            'education': instance.education,
+            'experience_years': instance.experience_years,
+            'law_firm': instance.law_firm,
+            'specializations': instance.specializations,
+            'license_number': instance.license_number,
+            'bar_council_id': instance.bar_council_id,
+            'consultation_fee': instance.consultation_fee,
+            'bio': instance.bio,
+            'verification_status': instance.verification_status,
+            'verification_notes': instance.verification_notes,
+            'verification_documents': instance.verification_documents,
+        }
+
+
+class LawyerConnectionRequestSerializer(serializers.Serializer):
+    """Serializer for lawyer connection requests"""
+
+    id = serializers.CharField(read_only=True)
+    client = UserSerializer(read_only=True)
+    lawyer = UserSerializer(read_only=True)
+    message = serializers.CharField(required=False, allow_blank=True)
+    status = serializers.CharField(read_only=True)
+    preferred_contact_method = serializers.CharField(required=False, allow_blank=True)
+    preferred_contact_value = serializers.CharField(required=False, allow_blank=True)
+    preferred_time = serializers.DateTimeField(required=False, allow_null=True)
+    meeting_link = serializers.CharField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
+
+    def to_representation(self, instance):
+        return {
+            'id': str(instance.id),
+            'client': UserSerializer(instance.client).data if instance.client else None,
+            'lawyer': UserSerializer(instance.lawyer).data if instance.lawyer else None,
+            'message': instance.message,
+            'status': instance.status,
+            'preferred_contact_method': instance.preferred_contact_method,
+            'preferred_contact_value': instance.preferred_contact_value,
+            'preferred_time': instance.preferred_time.isoformat() if instance.preferred_time else None,
+            'meeting_link': instance.meeting_link,
+            'created_at': instance.created_at.isoformat() if instance.created_at else None,
+            'updated_at': instance.updated_at.isoformat() if instance.updated_at else None,
+        }
+
+
+class LawyerConnectionStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=['accepted', 'declined'])
+    message = serializers.CharField(required=False, allow_blank=True)

@@ -8,6 +8,7 @@ import { Input } from "@/Components/ui/Input"; // Added Input import
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/Components/ui/Card";
 
 import { Edit, Save, XCircle } from 'lucide-react'; // Add new icons
+import ShareModal from '../Components/ShareModal';
 
 const MyDocuments = () => {
   const [documents, setDocuments] = useState([]);
@@ -16,6 +17,8 @@ const MyDocuments = () => {
   const navigate = useNavigate();
   const [editingDocId, setEditingDocId] = useState(null);
   const [newTitle, setNewTitle] = useState('');
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState(null);
 
   const fetchDocuments = async () => {
     try {
@@ -93,14 +96,21 @@ const MyDocuments = () => {
     }
   };
 
-  const handleShareDocument = (documentId) => {
-    const shareUrl = `${window.location.origin}/documentShare/${documentId}`;
-    navigator.clipboard.writeText(shareUrl);
-    toast.success('Document share link copied to clipboard!');
+  const handleShareDocument = (doc) => {
+    setSelectedDoc(doc);
+    setIsShareModalOpen(true);
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground p-8">
+      {isShareModalOpen && selectedDoc && (
+        <ShareModal
+          documentId={selectedDoc._id}
+          documentTitle={selectedDoc.title}
+          latestDocument={selectedDoc.latest_document}
+          onClose={() => setIsShareModalOpen(false)}
+        />
+      )}
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold text-primary">My Documents</h1>
@@ -180,7 +190,7 @@ const MyDocuments = () => {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => handleShareDocument(doc._id)}
+                    onClick={() => handleShareDocument(doc)}
                     className="border-primary/50 text-primary hover:bg-primary/10 transition-all"
                     title="Share Document"
                   >
