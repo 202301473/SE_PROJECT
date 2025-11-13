@@ -621,7 +621,7 @@ export default function Home() {
                   "Collect legally binding e-signatures from all parties with verification and secure audit trails.",
                 color: "from-primary",
               },
-            ].map((step, idx) => (
+            ].map((step, idx /* eslint-disable-line no-unused-vars */) => (
               <div key={step.number} className="relative group">
                 <div
                   className={`absolute inset-0 bg-gradient-to-br ${step.color} to-transparent opacity-0 group-hover:opacity-10 transition-opacity rounded-xl`}
@@ -759,7 +759,7 @@ export default function Home() {
               <div className="space-y-3">
                 <h3 className="text-xl font-bold">Key Benefits:</h3>
                 <ul className="space-y-2">
-                  {featureDetails[selectedFeature].features.map((feature, idx) => (
+                  {featureDetails[selectedFeature].features.map((feature, idx /* eslint-disable-line no-unused-vars */) => (
                     <li key={idx} className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center flex-shrink-0 mt-1">
                         <span className="text-white text-sm font-bold">✓</span>

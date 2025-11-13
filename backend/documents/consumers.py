@@ -26,6 +26,7 @@ class DocumentConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         data = json.loads(text_data)
         message_type = data.get('type')
+        print(f"Backend: Received WebSocket message: {data}") # Debug log
 
         if message_type == 'new_comment':
             # This part is typically handled by the HTTP POST API,
@@ -40,6 +41,17 @@ class DocumentConsumer(AsyncWebsocketConsumer):
                 'type': 'comments_list',
                 'comments': comments
             }))
+        elif message_type == 'document_content_change':
+            print(f"Backend: Broadcasting document_content_change to group {self.document_group_name}") # Debug log
+            # Broadcast the document content change to other clients in the group
+            await self.channel_layer.group_send(
+                self.document_group_name,
+                {
+                    'type': 'document_content_change',
+                    'content': data['content'],
+                    'sender_channel_name': self.channel_name # Include sender's channel name
+                }
+            )
 
     async def new_comment(self, event):
         comment = event['comment']
@@ -48,3 +60,12 @@ class DocumentConsumer(AsyncWebsocketConsumer):
             'type': 'new_comment',
             'comment': comment
         }))
+
+    async def document_content_change(self, event):
+        # Send document content change to WebSocket if not from the sender
+        if self.channel_name != event['sender_channel_name']:
+            print(f"Backend: Sending document_content_change to channel {self.channel_name}") # Debug log
+            await self.send(text_data=json.dumps({
+                'type': 'document_content_change',
+                'content': event['content']
+            }))

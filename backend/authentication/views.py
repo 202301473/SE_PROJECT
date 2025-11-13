@@ -24,6 +24,8 @@ from .serializers import (
     LawyerProfileSerializer,
     LawyerConnectionRequestSerializer,
     LawyerConnectionStatusSerializer,
+    ForgotPasswordSerializer, # Import ForgotPasswordSerializer
+    ResetPasswordSerializer,  # Import ResetPasswordSerializer
 )
 from datetime import datetime
 from uuid import uuid4
@@ -509,4 +511,89 @@ def lawyer_connection_update_view(request, connection_id):
     return Response({
         'message': f'Connection request {new_status}.',
         'request': response_serializer.data,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_view(request):
+    """Send OTP for password reset"""
+    serializer = ForgotPasswordSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    email = serializer.validated_data['email']
+    
+    try:
+        user = User.objects(email=email).first()
+        if not user:
+            return Response({
+                'error': 'User with this email does not exist.'
+            }, status=status.HTTP_404_NOT_FOUND)
+    except DoesNotExist:
+        return Response({
+            'error': 'User with this email does not exist.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Check if user registered with Google
+    if user.auth_provider == 'google':
+        return Response({
+            'error': 'This account is registered with Google. Please use Google Sign In. Password reset is not available for Google accounts.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Generate and send OTP for password reset
+    otp_sent = create_and_send_otp(user)
+    
+    if not otp_sent:
+        return Response({
+            'error': 'Failed to send OTP. Please try again.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    return Response({
+        'message': 'OTP sent to your email for password reset.',
+        'email': user.email
+    }, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password_view(request):
+    """Reset user password with OTP verification"""
+    serializer = ResetPasswordSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    email = serializer.validated_data['email']
+    otp = serializer.validated_data['otp_code']
+    new_password = serializer.validated_data['new_password']
+    
+    try:
+        user = User.objects(email=email).first()
+        if not user:
+            return Response({
+                'error': 'User not found.'
+            }, status=status.HTTP_404_NOT_FOUND)
+    except DoesNotExist:
+        return Response({
+            'error': 'User not found.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Check if user registered with Google
+    if user.auth_provider == 'google':
+        return Response({
+            'error': 'This account is registered with Google. Password reset is not available.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Verify OTP
+    if not is_otp_valid(user, otp):
+        return Response({
+            'error': 'Invalid or expired OTP.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Reset password
+    user.set_password(new_password)
+    user.save()
+    clear_otp(user)  # Clear OTP after successful reset
+    
+    return Response({
+        'message': 'Password reset successfully. Please login with your new password.'
     }, status=status.HTTP_200_OK)

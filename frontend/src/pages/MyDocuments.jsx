@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
@@ -6,12 +6,24 @@ import { FileText, History, Download, Trash2, PlusCircle, Share2 } from 'lucide-
 import { Button } from "@/Components/ui/Button";
 import { Input } from "@/Components/ui/Input"; // Added Input import
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/Components/ui/Card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/Components/ui/Tabs"; // Import Tabs components
+import ReactMarkdown from 'react-markdown'; // Import ReactMarkdown
+import remarkGfm from 'remark-gfm'; // Import remarkGfm for GitHub Flavored Markdown
 
 import { Edit, Save, XCircle } from 'lucide-react'; // Add new icons
 import ShareModal from '../Components/ShareModal';
+import { useAuth } from '../context/AuthContext'; // Import useAuth to get current user
+
+const truncateText = (text, maxLength) => {
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+};
 
 const MyDocuments = () => {
-  const [documents, setDocuments] = useState([]);
+  const { user } = useAuth(); // Get current user from AuthContext
+  const [myDocumentsList, setMyDocumentsList] = useState([]);
+  const [sharedWithMeDocumentsList, setSharedWithMeDocumentsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -19,12 +31,33 @@ const MyDocuments = () => {
   const [newTitle, setNewTitle] = useState('');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState(null);
+  const [activeTab, setActiveTab] = useState('my_documents'); // New state for active tab
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axios.get('/api/documents/conversations/');
-      setDocuments(response.data);
+      const allDocuments = response.data;
+
+      const owned = [];
+      const shared = [];
+
+      allDocuments.forEach(doc => {
+        if (doc.owner === user.username) {
+          owned.push(doc);
+        } else {
+          // Check if the document is shared with the current user
+          const isSharedWithMe = doc.shared_with_users?.some(
+            sharedUser => sharedUser.username === user.username
+          );
+          if (isSharedWithMe) {
+            shared.push(doc);
+          }
+        }
+      });
+
+      setMyDocumentsList(owned);
+      setSharedWithMeDocumentsList(shared);
     } catch (err) {
       console.error('Error fetching documents:', err);
       setError('Failed to load documents.');
@@ -32,11 +65,13 @@ const MyDocuments = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]); // user is a dependency for fetchDocuments
 
   useEffect(() => {
-    fetchDocuments();
-  }, []);
+    if (user) { // Only fetch documents if user is authenticated
+      fetchDocuments();
+    }
+  }, [user, fetchDocuments]); // Re-fetch when user changes or fetchDocuments changes
 
   const handleViewDocument = (documentId) => {
     navigate(`/document-creation/${documentId}`);
@@ -107,13 +142,13 @@ const MyDocuments = () => {
         <ShareModal
           documentId={selectedDoc._id}
           documentTitle={selectedDoc.title}
-          latestDocument={selectedDoc.latest_document}
+          initialSharedWithUsers={selectedDoc.shared_with_users || []} // Pass shared users
           onClose={() => setIsShareModalOpen(false)}
         />
       )}
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-primary">My Documents</h1>
+          <h1 className="text-4xl font-bold text-primary">Documents</h1>
           <Button
             onClick={() => navigate('/document-creation')}
             className="bg-gradient-to-r from-primary to-secondary text-foreground px-6 py-3 rounded-lg shadow-lg hover:scale-105 transition-all"
@@ -123,102 +158,170 @@ const MyDocuments = () => {
           </Button>
         </div>
 
-        {loading ? (
-          <div className="text-center py-10">
-            <History className="w-10 h-10 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading your documents...</p>
-          </div>
-        ) : error ? (
-          <div className="text-center py-10 text-destructive">
-            <p>{error}</p>
-          </div>
-        ) : documents.length === 0 ? (
-          <div className="text-center py-10">
-            <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-lg text-muted-foreground mb-4">No documents found.</p>
-            <Button
-              onClick={() => navigate('/document-creation')}
-              className="bg-gradient-to-r from-primary to-secondary text-foreground px-6 py-3 rounded-lg shadow-lg hover:scale-105 transition-all"
-            >
-              <PlusCircle className="w-5 h-5 mr-2" />
-              Create Your First Document
-            </Button>
-          </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {documents.map((doc) => (
-              <Card key={doc._id} className="bg-card/60 border-border/50 shadow-lg hover:shadow-xl transition-all duration-300 flex flex-col">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  {editingDocId === doc._id ? (
-                    <div className="flex-grow flex items-center gap-2">
-                      <Input
-                        value={newTitle}
-                        onChange={(e) => setNewTitle(e.target.value)}
-                        className="text-primary text-xl font-bold bg-input border-border/50"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') handleSaveTitle(doc._id);
-                        }}
-                      />
-                      <Button size="icon" variant="ghost" onClick={() => handleSaveTitle(doc._id)} title="Save Title">
-                        <Save className="w-4 h-4 text-green-500" />
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="my_documents">My Documents</TabsTrigger>
+            <TabsTrigger value="shared_with_me">Shared with Me</TabsTrigger>
+          </TabsList>
+          <TabsContent value="my_documents">
+            {loading ? (
+              <div className="text-center py-10">
+                <History className="w-10 h-10 animate-spin text-primary mx-auto mb-4" />
+                <p className="text-muted-foreground">Loading your documents...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-10 text-destructive">
+                <p>{error}</p>
+              </div>
+            ) : myDocumentsList.length === 0 ? (
+              <div className="text-center py-10">
+                <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-lg text-muted-foreground mb-4">No documents found.</p>
+                <Button
+                  onClick={() => navigate('/document-creation')}
+                  className="bg-gradient-to-r from-primary to-secondary text-foreground px-6 py-3 rounded-lg shadow-lg hover:scale-105 transition-all"
+                >
+                  <PlusCircle className="w-5 h-5 mr-2" />
+                  Create Your First Document
+                </Button>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {myDocumentsList.map((doc) => (
+                  <Card key={doc._id} className="bg-card/60 border-border/50 shadow-lg hover:shadow-xl transition-all duration-300 flex flex-col">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      {editingDocId === doc._id ? (
+                        <div className="flex-grow flex items-center gap-2">
+                          <Input
+                            value={newTitle}
+                            onChange={(e) => setNewTitle(e.target.value)}
+                            className="text-primary text-xl font-bold bg-input border-border/50"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') handleSaveTitle(doc._id);
+                            }}
+                          />
+                          <Button size="icon" variant="ghost" onClick={() => handleSaveTitle(doc._id)} title="Save Title">
+                            <Save className="w-4 h-4 text-green-500" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={handleCancelEdit} title="Cancel Edit">
+                            <XCircle className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-primary text-xl truncate">{doc.title}</CardTitle>
+                          <Button size="icon" variant="ghost" onClick={() => handleEditClick(doc._id, doc.title)} title="Edit Title">
+                            <Edit className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      )}
+                    </CardHeader>
+                    <CardDescription className="text-muted-foreground text-sm px-6">
+                      Created: {new Date(doc.created_at).toLocaleDateString()}
+                    </CardDescription>
+                    <div className="text-muted-foreground text-xs px-6 pb-4 h-12 overflow-hidden markdown-preview">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {truncateText(doc.latest_document, 150)}
+                      </ReactMarkdown>
+                    </div>
+                    <div className="p-4 border-t border-border/50 flex justify-between items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleViewDocument(doc._id)}
+                        className="bg-primary hover:bg-primary/80 text-foreground transition-all flex-grow"
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        View Document
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={handleCancelEdit} title="Cancel Edit">
-                        <XCircle className="w-4 h-4 text-muted-foreground" />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleShareDocument(doc)}
+                        className="border-primary/50 text-primary hover:bg-primary/10 transition-all"
+                        title="Share Document"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleDownloadPdf(doc._id, doc.title)}
+                        className="border-accent/50 text-accent hover:bg-accent/10 transition-all"
+                        title="Download PDF"
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleDeleteDocument(doc._id)}
+                        className="border-destructive/50 text-destructive hover:bg-destructive/10 transition-all"
+                        title="Delete Document"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+          <TabsContent value="shared_with_me">
+            {loading ? (
+              <div className="text-center py-10">
+                <History className="w-10 h-10 animate-spin text-primary mx-auto mb-4" />
+                <p className="text-muted-foreground">Loading shared documents...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-10 text-destructive">
+                <p>{error}</p>
+              </div>
+            ) : sharedWithMeDocumentsList.length === 0 ? (
+              <div className="text-center py-10">
+                <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-lg text-muted-foreground mb-4">No documents shared with you.</p>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {sharedWithMeDocumentsList.map((doc) => (
+                  <Card key={doc._id} className="bg-card/60 border-border/50 shadow-lg hover:shadow-xl transition-all duration-300 flex flex-col">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-primary text-xl truncate">{doc.title}</CardTitle>
-                      <Button size="icon" variant="ghost" onClick={() => handleEditClick(doc._id, doc.title)} title="Edit Title">
-                        <Edit className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Shared by: {doc.owner}</span>
+                    </CardHeader>
+                    <CardDescription className="text-muted-foreground text-sm px-6">
+                      Created: {new Date(doc.created_at).toLocaleDateString()}
+                    </CardDescription>
+                    <div className="text-muted-foreground text-xs px-6 pb-4 h-12 overflow-hidden markdown-preview">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {truncateText(doc.latest_document, 150)}
+                      </ReactMarkdown>
+                    </div>
+                    <div className="p-4 border-t border-border/50 flex justify-between items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleViewDocument(doc._id)}
+                        className="bg-primary hover:bg-primary/80 text-foreground transition-all flex-grow"
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        View Document
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleDownloadPdf(doc._id, doc.title)}
+                        className="border-accent/50 text-accent hover:bg-accent/10 transition-all"
+                        title="Download PDF"
+                      >
+                        <Download className="w-4 h-4" />
                       </Button>
                     </div>
-                  )}
-                </CardHeader>
-                <CardDescription className="text-muted-foreground text-sm px-6 pb-4">
-                  Created: {new Date(doc.created_at).toLocaleDateString()}
-                </CardDescription>
-                <div className="p-4 border-t border-border/50 flex justify-between items-center gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => handleViewDocument(doc._id)}
-                    className="bg-primary hover:bg-primary/80 text-foreground transition-all flex-grow"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    View Document
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleShareDocument(doc)}
-                    className="border-primary/50 text-primary hover:bg-primary/10 transition-all"
-                    title="Share Document"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleDownloadPdf(doc._id, doc.title)}
-                    className="border-accent/50 text-accent hover:bg-accent/10 transition-all"
-                    title="Download PDF"
-                  >
-                    <Download className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleDeleteDocument(doc._id)}
-                    className="border-destructive/50 text-destructive hover:bg-destructive/10 transition-all"
-                    title="Delete Document"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

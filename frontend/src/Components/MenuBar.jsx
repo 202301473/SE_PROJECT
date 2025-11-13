@@ -6,7 +6,7 @@ const MenuBar = ({ editor }) => {
     return null;
   }
 
-  const ToolButton = ({ onClick, isActive, disabled, title, icon: Icon }) => (
+  const ToolButton = ({ onClick, isActive, disabled, title, icon: IconComponent /* eslint-disable-line no-unused-vars */ }) => (
     <button
       onClick={onClick}
       disabled={disabled}
@@ -17,7 +17,7 @@ const MenuBar = ({ editor }) => {
       } disabled:opacity-40 disabled:cursor-not-allowed`}
       title={title}
     >
-      <Icon className="w-4 h-4" />
+      <IconComponent className="w-4 h-4" />
     </button>
   );
 

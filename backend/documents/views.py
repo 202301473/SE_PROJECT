@@ -1,3 +1,4 @@
+import json
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -6,12 +7,132 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import JSONParser
 
-from documents.mongo_client import get_all_conversations, get_conversation_by_id, save_conversation, update_conversation, delete_conversation, get_document_version_content, delete_document_version, update_share_permissions
+from documents.mongo_client import get_all_conversations, get_conversation_by_id, save_conversation, update_conversation, delete_conversation, get_document_version_content, delete_document_version, update_share_permissions, update_user_share_permissions
 from channels.layers import get_channel_layer # Import get_channel_layer
 from asgiref.sync import async_to_sync # Import async_to_sync
+from ai_generator.utils import get_gemini_response # Import the AI generation function
 
 
 from .comment_mongo_client import get_comments_for_document, add_comment, serialize_comment
+
+
+@api_view(['POST'])
+def create_conversation_with_chat(request):
+    """
+    Creates a new conversation based on an initial chat message and generates
+    the first version of the document using AI.
+    """
+    message = request.data.get('message')
+    initial_document_content = request.data.get('document_content', '') # Can be empty for initial creation
+    
+    if not message:
+        return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Generate AI response for the initial message
+        ai_raw_response = get_gemini_response(message, initial_document_content)
+        
+        # Parse the AI response to extract document content
+        ai_response_content = ""
+        if '```json' in ai_raw_response:
+            json_str = ai_raw_response.split('```json')[1].split('```')[0]
+            document_data = json.loads(json_str)
+            ai_response_content = document_data.get('text', '')
+        else:
+            ai_response_content = ai_raw_response # If not JSON, treat raw response as content
+
+        # Determine a title for the new document (can be improved)
+        title = message[:50] + "..." if len(message) > 50 else message
+        if not title:
+            title = "New Document"
+
+        # Prepare messages for saving
+        messages = [
+            {'sender': 'user', 'text': message},
+            {'sender': 'bot', 'text': ai_raw_response} # Save raw AI response to messages
+        ]
+
+        # Save the new conversation
+        conversation_id = save_conversation(
+            title=title,
+            messages=messages,
+            initial_document_content=ai_response_content, # AI's parsed response is the initial document content
+            uploaded_by=(request.user.username if request.user.is_authenticated else 'anonymous'),
+            notes='Initial document generation via chat'
+        )
+
+        if conversation_id:
+            return Response({
+                'conversation_id': conversation_id,
+                'response': ai_raw_response,
+                'updated_document_content': ai_response_content,
+                'title': title
+            }, status=status.HTTP_201_CREATED)
+        else:
+            return Response({'error': 'Failed to create conversation'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception as e:
+        print(f"Error creating conversation with chat: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+def send_chat_message(request, pk):
+    """
+    Sends a chat message to an existing conversation, generates an AI response,
+    and updates the conversation's messages and document content.
+    """
+    message = request.data.get('message')
+    document_content = request.data.get('document_content') # Current document content as context
+
+    if not message:
+        return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    conversation = get_conversation_by_id(pk)
+    if not conversation:
+        return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        # Generate AI response
+        ai_raw_response = get_gemini_response(message, document_content)
+
+        # Parse the AI response to extract document content
+        ai_response_content = ""
+        if '```json' in ai_raw_response:
+            json_str = ai_raw_response.split('```json')[1].split('```')[0]
+            document_data = json.loads(json_str)
+            ai_response_content = document_data.get('text', '')
+        else:
+            ai_response_content = ai_raw_response # If not JSON, treat raw response as content
+
+        # Update messages
+        updated_messages = conversation.get('messages', [])
+        updated_messages.append({'sender': 'user', 'text': message})
+        updated_messages.append({'sender': 'bot', 'text': ai_raw_response}) # Save raw AI response to messages
+
+        # Update conversation in DB
+        success = update_conversation(
+            pk,
+            conversation.get('title'), # Keep existing title
+            updated_messages,
+            ai_response_content, # AI's parsed response is the new document content
+            uploaded_by=(request.user.username if request.user.is_authenticated else 'anonymous'),
+            notes='Document update via chat message'
+        )
+
+        if success:
+            return Response({
+                'response': ai_raw_response,
+                'updated_document_content': ai_response_content
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Failed to update conversation'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception as e:
+        print(f"Error sending chat message: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 @api_view(['GET', 'POST'])
 @parser_classes([JSONParser])
@@ -125,6 +246,7 @@ def conversation_list(request):
         messages = request.data.get('messages')
         initial_document_content = request.data.get('initial_document_content')
         notes = request.data.get('notes', 'Initial Version')
+        shared_with_users = request.data.get('shared_with_users', []) # New: get shared_with_users
 
         print(f"[DEBUG Backend] conversation_list (POST) - Received messages: {messages}")
 
@@ -136,7 +258,8 @@ def conversation_list(request):
             messages=messages,
             initial_document_content=initial_document_content,
             uploaded_by=(request.user.username if request.user.is_authenticated else 'anonymous'),
-            notes=notes
+            notes=notes,
+            shared_with_users=shared_with_users # New: pass shared_with_users
         )
         if conversation_id:
             return Response({'id': conversation_id}, status=status.HTTP_201_CREATED)
@@ -150,10 +273,32 @@ def conversation_detail(request, pk):
     """
     if request.method == 'GET':
         conversation = get_conversation_by_id(pk)
-        if conversation:
-            return Response(conversation)
-        else:
+        if not conversation:
             return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        user_has_access = False
+        # 1. Check if the requesting user is the owner
+        if request.user.is_authenticated and conversation.get('owner') == request.user.username:
+            user_has_access = True
+        
+        # 2. Check public share permissions
+        share_permissions = conversation.get('share_permissions')
+        if share_permissions and share_permissions.get('permission_level') in ['view', 'edit']:
+            user_has_access = True
+
+        # 3. Check user-specific share permissions
+        if request.user.is_authenticated:
+            shared_with_users = conversation.get('shared_with_users', [])
+            for shared_user in shared_with_users:
+                if shared_user.get('username') == request.user.username:
+                    if shared_user.get('permission_level') in ['view', 'edit']:
+                        user_has_access = True
+                        break
+        
+        if not user_has_access:
+            return Response({'error': 'You do not have permission to access this document.'}, status=status.HTTP_403_FORBIDDEN)
+
+        return Response(conversation)
     
     elif request.method == 'PUT':
         conversation = get_conversation_by_id(pk)
@@ -174,6 +319,7 @@ def conversation_detail(request, pk):
         messages = request.data.get('messages')
         new_document_content = request.data.get('new_document_content')
         notes = request.data.get('notes', f'Version update via AI editor')
+        shared_with_users = request.data.get('shared_with_users') # New: get shared_with_users
 
         print(f"[DEBUG Backend] conversation_detail (PUT) - Received messages: {messages}")
 
@@ -188,7 +334,15 @@ def conversation_detail(request, pk):
         # Use existing messages if not provided in the request for a title-only update
         messages_to_update = messages if messages is not None else existing_conversation.get('messages', [])
 
-        success = update_conversation(pk, title, messages_to_update, new_document_content, uploaded_by=(request.user.username if request.user.is_authenticated else 'anonymous'), notes=notes)
+        success = update_conversation(
+            pk,
+            title,
+            messages_to_update,
+            new_document_content,
+            uploaded_by=(request.user.username if request.user.is_authenticated else 'anonymous'),
+            notes=notes,
+            shared_with_users=shared_with_users # New: pass shared_with_users
+        )
         if success:
             return Response({'status': 'success'}, status=status.HTTP_200_OK)
         else:
@@ -200,6 +354,48 @@ def conversation_detail(request, pk):
             return Response(status=status.HTTP_204_NO_CONTENT)
         else:
             return Response({'error': 'Failed to delete conversation'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+def share_document_with_user(request, pk):
+    """
+    Adds, updates, or removes a user's share permissions for a specific document.
+    Requires authentication.
+    """
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    username_to_share_with = request.data.get('username')
+    permission_level = request.data.get('permission_level') # 'view', 'edit', or None to remove
+
+    if not username_to_share_with:
+        return Response({'error': 'Username is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Optional: Validate if the username_to_share_with exists in your User model
+    # from authentication.models import User # Assuming User model is here
+    # if not User.objects.filter(username=username_to_share_with).exists():
+    #     return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Check if the requesting user is the owner of the document
+    conversation = get_conversation_by_id(pk)
+    if not conversation:
+        return Response({'error': 'Document not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    if conversation.get('owner') != request.user.username:
+        return Response({'error': 'You do not have permission to share this document.'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        success = update_user_share_permissions(pk, username_to_share_with, permission_level)
+        if success:
+            if permission_level:
+                return Response({'status': f'Document shared with {username_to_share_with} with {permission_level} permissions.'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'status': f'Share permissions for {username_to_share_with} removed.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Failed to update share permissions.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception as e:
+        print(f"Error in share_document_with_user: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 @api_view(['GET'])
 def get_version_content(request, pk, version_number):

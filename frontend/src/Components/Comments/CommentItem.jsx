@@ -38,7 +38,7 @@ const CommentItem = ({ comment, documentId, onCommentAdded, highlightCommentId }
         <p className="font-semibold text-foreground">{comment.user}</p>
         <p className="text-sm text-muted-foreground">{new Date(comment.created_at).toLocaleString()}</p>
       </div>
-      <p className="text-foreground mb-3">{comment.content}</p>
+      <p className="text-foreground mb-3" style={{wordBreak: 'break-word'}}>{comment.content}</p>
       <div className="flex items-center gap-3">
         <button
           onClick={() => setShowReplyForm(!showReplyForm)}

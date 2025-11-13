@@ -56,6 +56,7 @@
   --chart-3: #0fc;
   --chart-4: #1e90ff;
   --chart-5: #00bfff;
+  --radius: 0.625rem;
 }
 
  @layer base {
@@ -145,4 +146,75 @@
   .animate-fade-in {
     animation: fadeIn 0.3s ease-out;
   }
+}
+
+/* Basic Markdown Styling for ReactMarkdown */
+.markdown-preview h1 {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin-bottom: 0.5em;
+}
+
+.markdown-preview h2 {
+  font-size: 1.2em;
+  font-weight: bold;
+  margin-bottom: 0.4em;
+}
+
+.markdown-preview p {
+  margin-bottom: 0.5em;
+  line-height: 1.4;
+}
+
+.markdown-preview ul, .markdown-preview ol {
+  margin-left: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-preview ul li {
+  list-style-type: disc;
+}
+
+.markdown-preview ol li {
+  list-style-type: decimal;
+}
+
+.markdown-preview strong {
+  font-weight: bold;
+}
+
+.markdown-preview em {
+  font-style: italic;
+}
+
+.markdown-preview a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.markdown-preview blockquote {
+  border-left: 4px solid var(--border);
+  padding-left: 0.6em;
+  color: var(--muted-foreground);
+  margin-bottom: 0.5em;
+}
+
+.markdown-preview code {
+  font-family: monospace;
+  background-color: var(--muted);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+}
+
+.markdown-preview pre {
+  background-color: var(--muted);
+  padding: 0.8em;
+  border-radius: 5px;
+  overflow-x: auto;
+  margin-bottom: 0.5em;
+}
+
+.markdown-preview pre code {
+  background-color: transparent;
+  padding: 0;
 }

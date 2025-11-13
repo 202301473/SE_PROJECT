@@ -8,7 +8,6 @@ const CommentList = ({ documentId }) => {
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [ws, setWs] = useState(null);
   const location = useLocation(); // Get location object
   const [highlightCommentId, setHighlightCommentId] = useState(null); // State to store comment ID to highlight
 
@@ -41,7 +40,12 @@ const CommentList = ({ documentId }) => {
     // WebSocket setup
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // Assuming Django backend is on port 8000 for WebSocket connections
-    const newWs = new WebSocket(`${protocol}//localhost:8000/ws/document/${documentId}/`);
+    const accessToken = localStorage.getItem('access_token');
+    let wsUrl = `${protocol}//localhost:8000/ws/document/${documentId}/`;
+    if (accessToken) {
+      wsUrl += `?token=${accessToken}`;
+    }
+    const newWs = new WebSocket(wsUrl);
 
     newWs.onopen = () => {
       console.log('WebSocket connected for document:', documentId);
@@ -73,8 +77,6 @@ const CommentList = ({ documentId }) => {
     newWs.onerror = (err) => {
       console.error('WebSocket error for document:', documentId, err);
     };
-
-    setWs(newWs);
 
     return () => {
       console.log('Cleaning up WebSocket for document:', documentId);

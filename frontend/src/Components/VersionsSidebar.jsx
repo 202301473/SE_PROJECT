@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from '../api/axios';
 import { FileText, Download, Trash2, History, X, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -11,7 +11,7 @@ const VersionsSidebar = ({ conversationId, onSelectVersion, onClose, currentVers
   const [error, setError] = useState('');
   const [documentTitle, setDocumentTitle] = useState('Document');
 
-  const fetchDocumentVersions = async () => { // Moved fetch function outside useEffect for reusability
+  const fetchDocumentVersions = useCallback(async () => {
     if (!conversationId) return;
     setLoading(true);
     try {
@@ -25,11 +25,11 @@ const VersionsSidebar = ({ conversationId, onSelectVersion, onClose, currentVers
     } finally {
       setLoading(false);
     }
-  };
+  }, [conversationId]);
 
   useEffect(() => {
     fetchDocumentVersions();
-  }, [conversationId]);
+  }, [conversationId, fetchDocumentVersions]);
 
   const handleDownloadVersionPdf = async (versionNumber) => {
     try {

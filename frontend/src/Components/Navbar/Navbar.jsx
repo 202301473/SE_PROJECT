@@ -107,20 +107,24 @@ export default function Navbar() {
       </div>
 
       {/* Mobile Menu Overlay */}
-      {isMenuOpen && (
-        <div className="md:hidden fixed inset-0 bg-background/90 backdrop-blur-md z-40 flex flex-col items-center justify-center space-y-8">
-          <button
-            onClick={() => setIsMenuOpen(false)}
-            className="absolute top-5 right-5 p-3 rounded-lg hover:bg-foreground/10 transition-colors duration-200 text-foreground"
-          >
-            <X size={24} />
-          </button>
+      <div 
+        className={`md:hidden fixed top-0 right-0 bottom-0 w-3/4 max-w-sm bg-background/95 backdrop-blur-xl z-40 flex flex-col py-5 px-6 transform transition-transform duration-300 ease-in-out ${
+          isMenuOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <button
+          onClick={() => setIsMenuOpen(false)}
+          className="absolute top-5 right-5 p-3 rounded-lg hover:bg-foreground/10 transition-colors duration-200 text-foreground"
+        >
+          <X size={24} />
+        </button>
+        <div className="flex flex-col items-start space-y-6 mt-16"> {/* Adjusted for better spacing */}
           {navLinks.map((link, index) => (
             ((!link.requiresAuth) || isAuthenticated) && (
               <Link 
                 to={link.to} 
                 key={index} 
-                className="text-3xl font-bold text-foreground hover:text-primary transition-colors duration-200"
+                className="text-2xl font-bold text-foreground hover:text-primary transition-colors duration-200"
                 onClick={() => setIsMenuOpen(false)}
               >
                 {link.label}
@@ -129,28 +133,28 @@ export default function Navbar() {
           ))}
           {isAuthenticated ? (
             <>
-              <Link to="/profile" className="text-3xl font-bold text-foreground hover:text-primary transition-colors duration-200" onClick={() => setIsMenuOpen(false)}>
+              <Link to="/profile" className="text-2xl font-bold text-foreground hover:text-primary transition-colors duration-200" onClick={() => setIsMenuOpen(false)}>
                 Profile
               </Link>
               <Button 
                 onClick={() => { logout(); setIsMenuOpen(false); }} 
                 variant="outline" 
                 size="lg"
-                className="border-border hover:border-destructive hover:bg-destructive/10 hover:text-destructive transition-all duration-200 text-3xl font-bold"
+                className="border-border hover:border-destructive hover:bg-destructive/10 hover:text-destructive transition-all duration-200 text-2xl font-bold w-full justify-start" // Added w-full justify-start
               >
-                <LogOut size={25} className="mr-3" />
+                <LogOut size={20} className="mr-3" />
                 Logout
               </Button>
             </>
           ) : (
-            <Link to="/login" className="text-3xl font-bold text-foreground hover:text-primary transition-colors duration-200" onClick={() => setIsMenuOpen(false)}>
-              <Button size="lg" className="bg-gradient-to-r from-primary to-secondary hover:from-primary hover:to-secondary text-white shadow-md shadow-primary/30 hover:shadow-lg shadow-primary/40 transition-all duration-200 text-3xl font-bold">
+            <Link to="/login" className="text-2xl font-bold text-foreground hover:text-primary transition-colors duration-200 w-full" onClick={() => setIsMenuOpen(false)}>
+              <Button size="lg" className="bg-gradient-to-r from-primary to-secondary hover:from-primary hover:to-secondary text-white shadow-md shadow-primary/30 hover:shadow-lg shadow-primary/40 transition-all duration-200 text-2xl font-bold w-full justify-start"> {/* Added w-full justify-start */}
                 Login
               </Button>
             </Link>
           )}
         </div>
-      )}
+      </div>
     </nav>
   );
 }

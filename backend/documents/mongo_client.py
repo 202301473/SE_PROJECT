@@ -23,9 +23,15 @@ def get_all_conversations(user=None):
     try:
         query = {}
         if user:
-            query['owner'] = user
+            # Find documents where the user is the owner OR the user is in shared_with_users
+            query = {
+                '$or': [
+                    {'owner': user},
+                    {'shared_with_users.username': user}
+                ]
+            }
 
-        conversations = conversations_collection.find(query, {'title': 1, 'created_at': 1, 'document_versions': 1, 'owner': 1})
+        conversations = conversations_collection.find(query, {'title': 1, 'created_at': 1, 'document_versions': 1, 'owner': 1, 'shared_with_users': 1})
         # Convert ObjectId to string for JSON serialization and get latest document
         result = []
         for conv in conversations:
@@ -51,7 +57,7 @@ def get_conversation_by_id(conversation_id):
         print(f"Error fetching conversation by ID: {e}")
         return None
 
-def save_conversation(title, messages, initial_document_content=None, uploaded_by=None, notes=None, share_permissions=None):
+def save_conversation(title, messages, initial_document_content=None, uploaded_by=None, notes=None, share_permissions=None, shared_with_users=None):
     """Saves a new conversation to the database, creating the first document version."""
     current_time = datetime.utcnow()
     document_versions = []
@@ -73,6 +79,7 @@ def save_conversation(title, messages, initial_document_content=None, uploaded_b
             'updated_at': current_time,
             'owner': uploaded_by, # Add owner field
             'share_permissions': share_permissions,
+            'shared_with_users': shared_with_users if shared_with_users is not None else [], # New field
         }
         result = conversations_collection.insert_one(conversation_doc)
         print(f"[DEBUG] New conversation saved with ID: {result.inserted_id}")
@@ -83,7 +90,7 @@ def save_conversation(title, messages, initial_document_content=None, uploaded_b
         print(f"Error saving conversation: {e}")
         return None
 
-def update_conversation(conversation_id, title, messages, new_document_content=None, uploaded_by=None, notes=None):
+def update_conversation(conversation_id, title, messages, new_document_content=None, uploaded_by=None, notes=None, shared_with_users=None):
     """Updates an existing conversation, appending a new document version."""
     current_time = datetime.utcnow()
     update_doc = {
@@ -93,6 +100,9 @@ def update_conversation(conversation_id, title, messages, new_document_content=N
             'updated_at': current_time,
         }
     }
+
+    if shared_with_users is not None:
+        update_doc['$set']['shared_with_users'] = shared_with_users
 
     existing_conv = get_conversation_by_id(conversation_id)
     print(f"[DEBUG] update_conversation called for ID: {conversation_id}")
@@ -148,6 +158,33 @@ def update_share_permissions(conversation_id, share_permissions):
         print(f"Error updating share permissions: {e}")
         return False
 
+
+def update_user_share_permissions(conversation_id, username, permission_level):
+    """
+    Adds, updates, or removes a user's share permissions for a conversation.
+    permission_level can be 'view', 'edit', or None to remove.
+    """
+    try:
+        conversation = conversations_collection.find_one({'_id': ObjectId(conversation_id)})
+        if not conversation:
+            return False
+
+        shared_with_users = conversation.get('shared_with_users', [])
+        
+        # Remove existing entry for the user if it exists
+        shared_with_users = [u for u in shared_with_users if u['username'] != username]
+
+        if permission_level: # Add or update if permission_level is provided
+            shared_with_users.append({'username': username, 'permission_level': permission_level})
+        
+        result = conversations_collection.update_one(
+            {'_id': ObjectId(conversation_id)},
+            {'$set': {'shared_with_users': shared_with_users}}
+        )
+        return result.matched_count > 0
+    except Exception as e:
+        print(f"Error updating user share permissions: {e}")
+        return False
 
 def get_document_version_content(conversation_id, version_number):
     """Retrieves the content of a specific document version from a conversation."""

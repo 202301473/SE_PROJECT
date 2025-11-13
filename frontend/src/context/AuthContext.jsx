@@ -38,11 +38,26 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (email, password, socialUserData = null, socialTokens = null) => {
     setLoading(true);
     try {
-      const response = await axios.post('/api/auth/login/', { email, password });
-      const { tokens, user: userData, redirect } = response.data;
+      let tokens;
+      let userData;
+      let redirect;
+
+      if (socialUserData && socialTokens) {
+        // For social logins (e.g., Google)
+        tokens = socialTokens;
+        userData = socialUserData;
+        redirect = 'home'; // Assuming social login always redirects to home
+      } else {
+        // For traditional email/password login
+        const response = await axios.post('/api/auth/login/', { email, password });
+        tokens = response.data.tokens;
+        userData = response.data.user;
+        redirect = response.data.redirect;
+      }
+      
       const { access, refresh } = tokens;
 
       localStorage.setItem('access_token', access);

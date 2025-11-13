@@ -7,6 +7,8 @@ import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import VerifyOtp from "./pages/VerifyOtp"; // Added this import
+import ForgotPassword from "./pages/ForgotPassword"; // Import ForgotPassword
+import ResetPassword from "./pages/ResetPassword"; // Import ResetPassword
 
 
 import LawyerProfile from "./pages/LawyerProfile";
@@ -22,7 +24,7 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 
 function AppContent() {
   const location = useLocation();
-  const hideNavbarRoutes = ['/login', '/signup'];
+  const hideNavbarRoutes = ['/login', '/signup', '/forgot-password', '/reset-password']; // Updated hideNavbarRoutes
   const shouldShowNavbar = !hideNavbarRoutes.includes(location.pathname);
 
   return (
@@ -110,6 +112,8 @@ function AppContent() {
           />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} /> {/* Added ForgotPassword route */}
+          <Route path="/reset-password" element={<ResetPassword />} /> {/* Added ResetPassword route */}
           <Route
             path="/verify-otp"
             element={<VerifyOtp />}

@@ -7,7 +7,7 @@ import { Label } from '@/Components/ui/Label';
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
 
-const SignatureModal = ({ editor, messages, setMessages, onClose }) => {
+const SignatureModal = ({ onClose, onSignatureAdded }) => {
   const [partyName, setPartyName] = useState('');
   const [signatureFile, setSignatureFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -23,7 +23,7 @@ const SignatureModal = ({ editor, messages, setMessages, onClose }) => {
   };
 
   const handleAddSignature = async () => {
-    if (!partyName.trim() || !signatureFile || !editor) {
+    if (!partyName.trim() || !signatureFile) {
       toast.error('Please provide a party name and a signature image.');
       return;
     }
@@ -43,42 +43,12 @@ const SignatureModal = ({ editor, messages, setMessages, onClose }) => {
       }
 
       const signatureMarkdown = `![Signature for ${partyName}](${url})`;
-      const instruction = `You are formatting a legal document. Insert and position the signature image for "${partyName}" in the correct designated area. Use exactly this markdown for the signature: ${signatureMarkdown}\nPreserve all existing content and headings. Return the entire updated document in JSON as {"type":"document","text":"...markdown..."}.`.replace(/\\/g, '\\\\');
-
-      let payloadMessages = [...messages];
-      if (editor.getText()) {
-        const markdownContext = editor.storage.markdown.getMarkdown().replace(/\\/g, '\\\\');
-        payloadMessages = [
-          { sender: 'user', text: `Here is the legal document we are working on. Please use this as the basis for any updates.
-
----
-
-${markdownContext}` },
-          { sender: 'bot', text: 'Okay, I have the document. What changes would you like to make?' }
-        ];
-      }
-      payloadMessages.push({ sender: 'user', text: instruction });
-
-      const chatRes = await axios.post('api/ai-generator/chat/', { messages: payloadMessages });
-      const aiResponse = chatRes.data;
-      if (aiResponse.type === 'document') {
-        const documentMarkdown = aiResponse.text;
-        editor.commands.setContent(documentMarkdown);
-        const newBotMessages = [
-          { sender: 'bot', type: 'document_context', text: documentMarkdown },
-          { sender: 'bot', type: 'display', text: `I have updated the document with the signature for ${partyName}.` }
-        ];
-        setMessages(newBotMessages);
-        toast.success('Signature placed and document formatted.');
-      } else {
-        const newMessages = [...messages, { sender: 'bot', type: 'display', text: aiResponse.text || 'AI responded. Please review the update.' }];
-        setMessages(newMessages);
-        toast.success('AI responded. Please review the update.');
-      }
+      onSignatureAdded(signatureMarkdown, partyName);
+      toast.success('Signature uploaded successfully!');
       onClose();
     } catch (error) {
-      console.error('Signature placement error:', error);
-      const msg = error.response?.data?.error || 'Failed to place signature.';
+      console.error('Signature upload error:', error);
+      const msg = error.response?.data?.error || 'Failed to upload signature.';
       toast.error(msg);
     } finally {
       setLoading(false);

@@ -10,12 +10,15 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'legal_doc_generator.settings')
 django_asgi_app = get_asgi_application()
 
 from documents.routing import websocket_urlpatterns # Now this import should be safe
+from authentication.middleware import TokenAuthMiddleware # Import your custom middleware
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    "websocket": AuthMiddlewareStack(
-        URLRouter(
-            websocket_urlpatterns
+    "websocket": TokenAuthMiddleware( # Use your custom middleware
+        AuthMiddlewareStack(
+            URLRouter(
+                websocket_urlpatterns
+            )
         )
     ),
 })

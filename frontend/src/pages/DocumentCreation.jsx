@@ -10,7 +10,7 @@ import { Button } from "@/Components/ui/Button";
 import { Input } from "@/Components/ui/Input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/Components/ui/Card";
 
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react'; // Import Editor
 import StarterKit from '@tiptap/starter-kit'; // Corrected import
 import { Markdown } from 'tiptap-markdown';
 import { Indent } from '../lib/tiptap-extensions/indent';
@@ -22,6 +22,26 @@ import ShareModal from '../Components/ShareModal';
 import CommentList from '../Components/Comments/CommentList';
 import MenuBar from '../Components/MenuBar'; // Import the MenuBar component
 import VersionsSidebar from '../Components/VersionsSidebar';
+import SignatureModal from '../Components/SignatureModal'; // Import SignatureModal
+
+// Helper function to convert Markdown to HTML using a headless Tiptap editor
+const convertMarkdownToHtml = (markdownContent) => {
+  if (!markdownContent) return '';
+  const tempEditor = new Editor({
+    extensions: [
+      StarterKit,
+      Markdown,
+      Image.configure({ inline: true }),
+      Indent,
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Underline,
+    ],
+  });
+  tempEditor.commands.setContent(markdownContent, false, { contentType: 'markdown' });
+  const html = tempEditor.getHTML();
+  tempEditor.destroy();
+  return html;
+};
 
 
 const DocumentCreation = () => {
@@ -37,11 +57,8 @@ const DocumentCreation = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [finalDocument, setFinalDocument] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-  const fileInputRef = useRef(null);
-  const [signatureRole, setSignatureRole] = useState(null);
   const chatContainerRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
-  const [lastSaved, setLastSaved] = useState(null);
   const [isVersionsSidebarOpen, setIsVersionsSidebarOpen] = useState(false);
   const [currentVersion, setCurrentVersion] = useState(null);
   const [originalDocumentContent, setOriginalDocumentContent] = useState(''); // New state to track original content
@@ -49,6 +66,8 @@ const DocumentCreation = () => {
   const [tempTitle, setTempTitle] = useState(''); // New state for temporary title during editing
   const [commentsSidebarOpen, setCommentsSidebarOpen] = useState(false); // State for comments sidebar
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false); // State for SignatureModal
+  const [documentSharedWithUsers, setDocumentSharedWithUsers] = useState([]); // New state for shared users
 
 
   const documentRef = useRef(null); // Ref for the document area
@@ -111,6 +130,8 @@ const DocumentCreation = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const ws = useRef(null); // WebSocket instance
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -122,7 +143,17 @@ const DocumentCreation = () => {
     ],
     content: finalDocument,
     onUpdate: ({ editor }) => {
-      setFinalDocument(editor.getHTML());
+      const newContent = editor.getHTML();
+      setFinalDocument(newContent);
+      // Send content update via WebSocket
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        const message = JSON.stringify({
+          type: 'document_content_change',
+          content: newContent,
+        });
+        ws.current.send(message);
+        console.log('Frontend: Sent document_content_change:', message); // Debug log
+      }
     },
     editorProps: {
       attributes: {
@@ -131,6 +162,51 @@ const DocumentCreation = () => {
     },
   });
 
+  // WebSocket connection and message handling
+  useEffect(() => {
+    if (!mongoConversationId) return;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // Explicitly connect to port 8000 where Daphne is running
+    const accessToken = localStorage.getItem('access_token');
+    let wsUrl = `${protocol}//${window.location.hostname}:8000/ws/document/${mongoConversationId}/`;
+    if (accessToken) {
+      wsUrl += `?token=${accessToken}`;
+    }
+    const newWs = new WebSocket(wsUrl);
+    ws.current = newWs;
+
+    newWs.onopen = () => {
+      console.log('WebSocket connected');
+    };
+
+    newWs.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log('Frontend: Received WebSocket message:', data); // Debug log
+      if (data.type === 'document_content_change') {
+        // Update finalDocument state, let the useEffect handle editor update
+        setFinalDocument(data.content);
+        console.log('Frontend: finalDocument state updated from WebSocket.'); // Debug log
+      } else if (data.type === 'new_comment') {
+        // Handle new comment, e.g., refresh comments list
+        toast.success('New comment added!');
+        // You might want to trigger a re-fetch of comments or update the state directly
+      }
+    };
+
+    newWs.onclose = () => {
+      console.log('WebSocket disconnected');
+    };
+
+    newWs.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => {
+      newWs.close();
+    };
+  }, [mongoConversationId, editor]); // Reconnect if document ID or editor instance changes
+
   const fetchConversation = useCallback(async (idToFetch) => {
     if (idToFetch) {
       try {
@@ -138,52 +214,54 @@ const DocumentCreation = () => {
         const conversation = convResponse.data;
         setTitle(conversation.title || '');
         setMessages(conversation.messages || []);
-        
-        if (conversation.document_versions && conversation.document_versions.length > 0) {
-          let contentToLoad = '';
-          let versionToSet = null;
-          if (versionToLoad) {
-            const specificVersion = conversation.document_versions.find(v => v.version_number === parseInt(versionToLoad));
-            if (specificVersion) {
-              contentToLoad = specificVersion.content;
-              versionToSet = specificVersion.version_number;
+                  setDocumentSharedWithUsers(conversation.shared_with_users || []); // Set shared users
+                
+                if (conversation.document_versions && conversation.document_versions.length > 0) {
+                  let contentToLoad = '';
+                  let versionToSet = null;
+                  if (versionToLoad) {
+                    const specificVersion = conversation.document_versions.find(v => v.version_number === parseInt(versionToLoad));
+                    if (specificVersion) {
+                      contentToLoad = specificVersion.content;
+                      versionToSet = specificVersion.version_number;
+                    } else {
+                      toast.error(`Version ${versionToLoad} not found.`);
+                      const latestVersion = conversation.document_versions[conversation.document_versions.length - 1];
+                      contentToLoad = latestVersion.content;
+                      versionToSet = latestVersion.version_number;
+                    }
+                  } else {
+                    const latestVersion = conversation.document_versions[conversation.document_versions.length - 1];
+                    contentToLoad = latestVersion.content;
+                    versionToSet = latestVersion.version_number;
+                  }
+                  const htmlContent = convertMarkdownToHtml(contentToLoad); // Convert Markdown to HTML
+                  setFinalDocument(htmlContent);
+                  setCurrentVersion(versionToSet);
+                  setOriginalDocumentContent(htmlContent); // Set original content here
+                } else {
+                  setFinalDocument('');
+                  setCurrentVersion(null);
+                  setOriginalDocumentContent(''); // Set original content here
+                }
+              } catch (error) {
+                console.error('Error fetching conversation:', error);
+                if (error.response && error.response.status === 404) {
+                  toast.error('Document not found. Redirecting to My Documents.');
+                  navigate('/my-documents'); // Navigate to a safe page
+                } else {
+                  toast.error('Could not load conversation.');
+                }
+              }
             } else {
-              toast.error(`Version ${versionToLoad} not found.`);
-              const latestVersion = conversation.document_versions[conversation.document_versions.length - 1];
-              contentToLoad = latestVersion.content;
-              versionToSet = latestVersion.version_number;
+              setTitle('');
+              setMessages([]);
+              setFinalDocument('');
+              setCurrentVersion(null);
+              setOriginalDocumentContent(''); // Set original content here
+              setDocumentSharedWithUsers([]); // Clear shared users for new document
             }
-          } else {
-            const latestVersion = conversation.document_versions[conversation.document_versions.length - 1];
-            contentToLoad = latestVersion.content;
-            versionToSet = latestVersion.version_number;
-          }
-          setFinalDocument(contentToLoad);
-          setCurrentVersion(versionToSet);
-          setOriginalDocumentContent(contentToLoad); // Set original content here
-        } else {
-          setFinalDocument('');
-          setCurrentVersion(null);
-          setOriginalDocumentContent(''); // Set original content here
-        }
-      } catch (error) {
-        console.error('Error fetching conversation:', error);
-        if (error.response && error.response.status === 404) {
-          toast.error('Document not found. Redirecting to My Documents.');
-          navigate('/my-documents'); // Navigate to a safe page
-        } else {
-          toast.error('Could not load conversation.');
-        }
-      }
-    } else {
-      setTitle('');
-      setMessages([]);
-      setFinalDocument('');
-      setCurrentVersion(null);
-      setOriginalDocumentContent(''); // Set original content here
-    }
-  }, [versionToLoad, navigate]); // Add navigate to dependency array
-
+          }, [versionToLoad, navigate]); // Add navigate to dependency array
   const handleSelectVersion = async (versionNumber) => {
     try {
       const response = await axios.get(`/api/documents/conversations/${mongoConversationId}/`);
@@ -204,7 +282,7 @@ const DocumentCreation = () => {
   };
 
   useEffect(() => {
-    if (editor && finalDocument !== editor.getHTML()) {
+    if (editor) {
       editor.chain().setContent(finalDocument, false).setMeta('addToHistory', false).run();
     }
   }, [finalDocument, editor]);
@@ -213,93 +291,7 @@ const DocumentCreation = () => {
     fetchConversation(mongoConversationId);
   }, [mongoConversationId, versionToLoad, fetchConversation]);
 
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  const handleEditTitleClick = () => {
-    setIsTitleEditing(true);
-    setTempTitle(title); // Initialize tempTitle with current title
-  };
-
-  const handleSaveTitle = async () => {
-    if (!tempTitle.trim()) {
-      toast.error('Document title cannot be empty.');
-      return;
-    }
-    if (tempTitle === title) {
-      setIsTitleEditing(false);
-      return;
-    }
-    try {
-      await axios.put(`api/documents/conversations/${mongoConversationId}/`, { title: tempTitle });
-      setTitle(tempTitle); // Update main title state
-      toast.success('Document title updated!');
-      setIsTitleEditing(false);
-    } catch (err) {
-      console.error('Error updating document title:', err);
-      toast.error('Failed to update document title.');
-    }
-  };
-
-  const handleCancelTitleEdit = () => {
-    setIsTitleEditing(false);
-    setTempTitle(''); // Clear temp title
-  };
-
-  const handleSendMessage = async () => {
-    if (!chatMessage.trim() || !editor) return;
-
-    const userMessage = { sender: 'user', text: chatMessage, type: 'display' };
-    setMessages(prev => [...prev, userMessage]);
-    setChatMessage('');
-    setIsGenerating(true);
-
-    let payloadMessages = [...messages, userMessage];
-
-    if (editor.getText()) {
-      const markdownContext = editor.storage.markdown.getMarkdown();
-      payloadMessages = [
-        { sender: 'user', text: `Here is the legal document we are working on. Please use this as the basis for any updates.\n\n---\n\n${markdownContext}` },
-        { sender: 'bot', text: 'Okay, I have the document. What changes would you like to make?' },
-        userMessage
-      ];
-    }
-
-    try {
-      const response = await axios.post('api/ai-generator/chat/', { messages: payloadMessages });
-      const aiResponse = response.data;
-      console.log('AI Response:', aiResponse); // Debugging line
-      
-      if (aiResponse.type === 'document') {
-        console.log('Raw aiResponse.text:', aiResponse.text); // New debugging line
-        console.log('Type of aiResponse.text:', typeof aiResponse.text); // New debugging line
-        let documentMarkdown = aiResponse.text;
-        // Escape backslashes to prevent "Invalid \escape" errors
-        documentMarkdown = documentMarkdown.replace(/\\/g, '\\\\');
-        console.log('Document Markdown from AI (after escaping):', documentMarkdown); // Debugging line
-        editor.chain().setContent(documentMarkdown).selectAll().indent().run();
-
-        const newBotMessages = [
-          { sender: 'bot', type: 'document_context', text: documentMarkdown },
-          { sender: 'bot', type: 'display', text: "I have updated the document for you. You can review the changes and ask for more updates if needed." }
-        ];
-        setMessages(prev => [...prev, ...newBotMessages]);
-      } else {
-        setMessages(prev => [...prev, { sender: 'bot', type: 'display', text: aiResponse.text }]);
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      const errorMessage = error.response?.data?.error || 'An error occurred. Please try again.';
-      setMessages(prev => [...prev, { sender: 'bot', type: 'display', text: `Error: ${errorMessage}` }]);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleSaveConversation = async () => {
+  const handleSaveConversation = useCallback(async () => {
     if (!title.trim()) {
       toast.error('Please provide a title for the document.');
       return;
@@ -332,13 +324,28 @@ const DocumentCreation = () => {
         toast.success('Document updated and new version saved!');
       }
       await fetchConversation(idToUseForFetch);
-      setLastSaved(new Date());
       setOriginalDocumentContent(finalDocument); // Update original content after successful save
     } catch (error) {
       console.error('Error saving document/conversation:', error);
       toast.error(`Failed to save document or conversation: ${error.message}`);
     }
-  };
+  }, [title, finalDocument, originalDocumentContent, mongoConversationId, messages, fetchConversation, navigate]);
+
+  // Debounced save effect
+  useEffect(() => {
+    if (!mongoConversationId || !editor) return;
+
+    const handler = setTimeout(() => {
+      // Only save if there are actual changes and the editor is ready
+      if (finalDocument !== originalDocumentContent && editor.isReady) {
+        handleSaveConversation();
+      }
+    }, 2000); // Save after 2 seconds of inactivity
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [finalDocument, mongoConversationId, editor, originalDocumentContent, handleSaveConversation]);
 
   const handleDeleteVersion = async (convId, versionNumber) => {
     if (!convId || !versionNumber) {
@@ -389,80 +396,79 @@ const DocumentCreation = () => {
     }
   };
 
-  const handleSelectSignature = async (role) => {
-    setSignatureRole(role);
-    if (fileInputRef.current) fileInputRef.current.click();
-  };
-
-  const handleSignatureFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !editor) return;
-    if (!['image/png','image/jpeg','image/jpg','image/webp'].includes(file.type)) {
-      toast.error('Please select a PNG, JPG, or WEBP image.');
-      return;
-    }
-    try {
-      const form = new FormData();
-      form.append('signature', file);
-      const res = await axios.post('api/utils/upload-signature/', form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      const url = res.data?.url;
-      if (!url) {
-        toast.error('Upload failed. No URL returned.');
-        return;
-      }
-      const role = signatureRole === 'landlord' ? 'landlord' : 'tenant';
-      const signatureMarkdown = `![signature ${role}](${url})`;
-      const instruction = `You are formatting a legal document. Insert and position the signature image for the ${role === 'landlord' ? 'First Party (Landlord)' : 'Second Party (Tenant)'} in the correct designated area so the final order is:
-1) First Party signature
-2) First Party name
-3) Second Party signature
-4) Second Party name
-Use exactly this markdown image for the ${role === 'landlord' ? 'First Party' : 'Second Party'}: ${signatureMarkdown}
-Preserve all existing content and headings. Return the entire updated document in JSON as {"type":"document","text":"...markdown..."}.`.replace(/\\/g, '\\\\');
-
-      let payloadMessages = [...messages];
-      if (editor.getText()) {
-        const markdownContext = editor.storage.markdown.getMarkdown().replace(/\\/g, '\\\\');
-        payloadMessages = [
-          { sender: 'user', text: `Here is the legal document we are working on. Please use this as the basis for any updates.\n\n---\n\n${markdownContext}` },
-          { sender: 'bot', text: 'Okay, I have the document. What changes would you like to make?' }
-        ];
-      }
-      payloadMessages.push({ sender: 'user', text: instruction });
-
-      setIsGenerating(true);
-      const chatRes = await axios.post('api/ai-generator/chat/', { messages: payloadMessages });
-      const aiResponse = chatRes.data;
-      if (aiResponse.type === 'document') {
-        const documentMarkdown = aiResponse.text;
-        editor.commands.setContent(documentMarkdown);
-        const newBotMessages = [
-          { sender: 'bot', type: 'document_context', text: documentMarkdown },
-          { sender: 'bot', type: 'display', text: 'I have updated the document with the signature placement.' }
-        ];
-        setMessages(prev => [...prev, ...newBotMessages]);
-        toast.success('Signature placed and document formatted.');
-      } else {
-        setMessages(prev => [...prev, { sender: 'bot', type: 'display', text: aiResponse.text || 'AI responded. Please review the update.' }]);
-        toast.success('AI responded. Please review the update.');
-      }
-    } catch (error) {
-      console.error('Signature upload error:', error);
-      const msg = error.response?.data?.error || 'Failed to upload signature.';
-      toast.error(msg);
-    } finally {
-      setIsGenerating(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      setSignatureRole(null);
-    }
-  };
-
   const handleKeyPress = (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  const handleEditTitleClick = () => {
+    setTempTitle(title);
+    setIsTitleEditing(true);
+  };
+
+  const handleSaveTitle = async () => {
+    if (!tempTitle.trim()) {
+      toast.error('Title cannot be empty.');
+      return;
+    }
+    if (tempTitle === title) {
+      setIsTitleEditing(false);
+      return;
+    }
+    try {
+      await axios.put(`/api/documents/conversations/${mongoConversationId}/`, { title: tempTitle });
+      setTitle(tempTitle);
+      toast.success('Title updated successfully!');
+      setIsTitleEditing(false);
+    } catch (error) {
+      console.error('Error updating title:', error);
+      toast.error('Failed to update title.');
+    }
+  };
+
+  const handleCancelTitleEdit = () => {
+    setIsTitleEditing(false);
+    setTempTitle(title); // Revert to original title
+  };
+
+  const handleSendMessage = async () => {
+    if (!chatMessage.trim() || isGenerating) return;
+
+    setIsGenerating(true);
+    const userMessage = { sender: 'user', text: chatMessage };
+    setMessages((prevMessages) => [...prevMessages, userMessage]);
+    setChatMessage('');
+
+    try {
+      const payload = {
+        message: chatMessage,
+        document_content: finalDocument, // Send current document content as context
+      };
+
+      let response;
+      if (mongoConversationId) {
+        // If conversation exists, update it
+        response = await axios.post(`/api/documents/conversations/${mongoConversationId}/chat/`, payload);
+      } else {
+        // If no conversation, create a new one with the initial message
+        response = await axios.post('/api/documents/conversations/chat/', payload);
+        const newConversationId = response.data.conversation_id;
+        navigate(`/document-creation/${newConversationId}`, { replace: true });
+      }
+
+      const botMessage = { sender: 'bot', text: response.data.response };
+      setMessages((prevMessages) => [...prevMessages, botMessage]);
+      const htmlUpdatedDocumentContent = convertMarkdownToHtml(response.data.updated_document_content);
+      setFinalDocument(htmlUpdatedDocumentContent);
+      toast.success('AI response received!');
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to get AI response.');
+      setMessages((prevMessages) => [...prevMessages, { sender: 'bot', text: 'Error: Could not get a response from the AI.' }]);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -540,7 +546,7 @@ Preserve all existing content and headings. Return the entire updated document i
                           ? 'bg-primary text-foreground'
                           : 'bg-card text-foreground border border-border/10'
                       }`}>
-                        <p style={{whiteSpace: 'pre-wrap'}}>{msg.text}</p>
+                        <p style={{whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{msg.text}</p>
                       </div>
                       {msg.sender === 'user' && (
                         <div className="w-6 h-6 flex-shrink-0 rounded-full bg-muted flex items-center justify-center">
@@ -594,14 +600,14 @@ Preserve all existing content and headings. Return the entire updated document i
 
   // Document generated view with 3-column layout
   return (
-    <div className="flex relative h-full bg-background overflow-hidden">
+    <div className="flex relative h-full bg-background overflow-hidden overflow-x-hidden">
       <div className="fixed inset-0 opacity-20 pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary rounded-full mix-blend-multiply filter blur-3xl animate-pulse"></div>
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary rounded-full mix-blend-multiply filter blur-3xl animate-pulse delay-1000"></div>
       </div>
 
       {/* Left Sidebar - Chat */}
-      <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-gradient-to-b from-card/95 to-card/95 backdrop-blur-xl border-r border-border/10 flex flex-col relative z-20 overflow-hidden h-full`}>
+     <div className={`${sidebarOpen ? 'translate-x-0 w-80 opacity-100' : '-translate-x-full max-w-0 opacity-0 pointer-events-none'} transition-all duration-300 bg-gradient- to-b from-card/95 to-card/95 backdrop-blur-xl border-r border-border/10 flex flex-col absolute z-20 overflow-hidden h-full`}> 
         <div className="p-4 border-b border-border/10">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -624,8 +630,7 @@ Preserve all existing content and headings. Return the entire updated document i
                   ? 'bg-primary text-foreground'
                   : 'bg-card text-foreground border border-border/10'
               }`}>
-                <p style={{whiteSpace: 'pre-wrap'}}>{msg.text}</p>
-              </div>
+                                      <p style={{whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{msg.text}</p>              </div>
               {msg.sender === 'user' && (
                 <div className="w-6 h-6 flex-shrink-0 rounded-full bg-muted flex items-center justify-center">
                   <User className="w-3 h-3 text-muted-foreground" />
@@ -672,7 +677,7 @@ Preserve all existing content and headings. Return the entire updated document i
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col relative z-10 h-full overflow-hidden">
+      <div className={`flex-1 flex flex-col relative z-10 h-full overflow-hidden transition-all duration-300 ${sidebarOpen ? 'ml-80' : 'ml-0'}`}>
         {/* Top Bar */}
         <div className="px-6 py-4 bg-gradient-to-r from-card/80 to-card/80 backdrop-blur-xl border-b border-border/10 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-4 min-w-0 flex-1">
@@ -802,35 +807,22 @@ Preserve all existing content and headings. Return the entire updated document i
               </div>
             </div>
           ) : (
-            <div ref={documentRef} className="flex-1 overflow-y-auto custom-scrollbar bg-card/60 border border-border/10 rounded-xl p-8 markdown-preview shadow-2xl text-foreground" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(finalDocument) }} />
+            <div ref={documentRef} className="flex-1 overflow-y-auto custom-scrollbar bg-card/60 border border-border/10 rounded-xl p-8 markdown-preview shadow-2xl text-foreground">
+                {console.log("Previewing finalDocument:", finalDocument)}
+                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(finalDocument) }} />
+              </div>
           )}
 
           {/* Action Buttons at Bottom */}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3 pt-6 pb-6 border-t border-border/10 bg-card/80 rounded-b-xl">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={handleSignatureFileChange}
-              className="hidden"
-            />
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleSelectSignature('landlord')}
+              onClick={() => setIsSignatureModalOpen(true)} // Open SignatureModal
               className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all"
             >
               <PenTool className="w-4 h-4 mr-2" />
-              First Party Signature
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleSelectSignature('tenant')}
-              className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all"
-            >
-              <PenTool className="w-4 h-4 mr-2" />
-              Second Party Signature
+              Add Signature
             </Button>
             <Button
               onClick={handleDownloadPdf}
@@ -853,7 +845,7 @@ Preserve all existing content and headings. Return the entire updated document i
       </div>
 
       {/* Right Sidebar - Comments */}
-      <div className={`${commentsSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-gradient-to-b from-card/95 to-card/95 backdrop-blur-xl border-l border-border/10 flex flex-col relative z-20 overflow-hidden h-full`}>
+      <div className={`${commentsSidebarOpen ? 'translate-x-0 w-80 opacity-100' : 'translate-x-full max-w-0 opacity-0 pointer-events-none'} transition-all duration-300 bg-gradient-to-b from-card/95 to-card/95 backdrop-blur-xl border-l border-border/10 flex flex-col absolute right-0 z-20 overflow-hidden h-full`}>
         {commentsSidebarOpen && mongoConversationId && (
           <div className="flex flex-col h-full">
             <div className="p-4 border-b border-border/10 flex items-center justify-between">
@@ -876,7 +868,7 @@ Preserve all existing content and headings. Return the entire updated document i
       </div>
 
       {/* Right Sidebar - Versions */}
-      <div className={`${isVersionsSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-gradient-to-b from-card/95 to-card/95 backdrop-blur-xl border-l border-border/10 flex flex-col relative z-20 overflow-hidden h-full`}>
+      <div className={`${isVersionsSidebarOpen ? 'translate-x-0 w-80 opacity-100' : 'translate-x-full max-w-0 opacity-0 pointer-events-none'} transition-all duration-300 bg-gradient-to-b from-card/95 to-card/95 backdrop-blur-xl border-l border-border/10 flex flex-col absolute right-0 z-20 overflow-hidden h-full`}>
         <VersionsSidebar
           conversationId={mongoConversationId}
           onSelectVersion={handleSelectVersion}
@@ -891,6 +883,21 @@ Preserve all existing content and headings. Return the entire updated document i
           documentId={mongoConversationId}
           documentTitle={title}
           onClose={() => setIsShareModalOpen(false)}
+          initialSharedWithUsers={documentSharedWithUsers} // Pass shared users
+        />
+      )}
+
+      {isSignatureModalOpen && (
+        <SignatureModal
+          onClose={() => setIsSignatureModalOpen(false)}
+          onSignatureAdded={async (signatureMarkdown, partyName) => {
+            if (editor) {
+              editor.commands.setContent(editor.getHTML() + `\n\n---\n\n${signatureMarkdown}\n\n**${partyName}**`);
+              setFinalDocument(editor.getHTML());
+              // Automatically save the document after adding a signature
+              await handleSaveConversation();
+            }
+          }}
         />
       )}
 

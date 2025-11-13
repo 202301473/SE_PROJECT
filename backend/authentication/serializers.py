@@ -256,3 +256,17 @@ class LawyerConnectionRequestSerializer(serializers.Serializer):
 class LawyerConnectionStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=['accepted', 'declined'])
     message = serializers.CharField(required=False, allow_blank=True)
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+class ResetPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp_code = serializers.CharField(required=True, max_length=6, min_length=6)
+    new_password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+    new_password2 = serializers.CharField(write_only=True, required=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password2']:
+            raise serializers.ValidationError({"new_password": "New passwords didn't match."})
+        return attrs
