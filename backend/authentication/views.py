@@ -370,7 +370,7 @@ def logout_view(request):
 @permission_classes([AllowAny])
 def lawyer_list_view(request):
     """List approved lawyers"""
-    profiles = LawyerProfile.objects(verification_status='approved')
+    profiles = LawyerProfile.objects.all()
     serializer = LawyerProfileSerializer(profiles, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -409,7 +409,7 @@ def connect_with_lawyer_view(request, lawyer_id):
     if not lawyer:
         return Response({'error': 'Lawyer not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-    profile = LawyerProfile.objects(user=lawyer, verification_status='approved').first()
+    profile = LawyerProfile.objects(user=lawyer).first()
     if not profile:
         return Response({'error': 'Lawyer is not available for connections yet.'}, status=status.HTTP_400_BAD_REQUEST)
 

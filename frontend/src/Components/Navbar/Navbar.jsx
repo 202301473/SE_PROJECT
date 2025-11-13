@@ -27,7 +27,6 @@ export default function Navbar() {
     { to: "/", label: "Home" },
     { to: "/document-analyser", label: "Document Analyzer" },
     { to: "/document-creation", label: "Document Generator" },
-    { to: "/lawyers", label: "Find Lawyers" },
     { to: "/lawyer-connect", label: "Connect" },
     { to: "/my-documents", label: "My Documents", requiresAuth: true },
   ];

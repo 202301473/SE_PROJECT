@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button"
 import { Link } from "react-router-dom"
 import React, { useState, Suspense } from "react"
 import Navbar from "@/Components/Navbar/Navbar" // Import the new Navbar component
+
 import { useAuth } from '../context/AuthContext'; // Import useAuth
 
 const Subtle3DBackground = React.lazy(() => import("../Components/Subtle3DBackground.jsx"))

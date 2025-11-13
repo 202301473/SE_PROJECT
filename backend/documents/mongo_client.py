@@ -51,7 +51,7 @@ def get_conversation_by_id(conversation_id):
         print(f"Error fetching conversation by ID: {e}")
         return None
 
-def save_conversation(title, messages, initial_document_content=None, uploaded_by=None, notes=None):
+def save_conversation(title, messages, initial_document_content=None, uploaded_by=None, notes=None, share_permissions=None):
     """Saves a new conversation to the database, creating the first document version."""
     current_time = datetime.utcnow()
     document_versions = []
@@ -72,6 +72,7 @@ def save_conversation(title, messages, initial_document_content=None, uploaded_b
             'created_at': current_time,
             'updated_at': current_time,
             'owner': uploaded_by, # Add owner field
+            'share_permissions': share_permissions,
         }
         result = conversations_collection.insert_one(conversation_doc)
         print(f"[DEBUG] New conversation saved with ID: {result.inserted_id}")
@@ -133,6 +134,19 @@ def delete_conversation(conversation_id):
         return True
     except Exception as e:
         print(f"Error deleting conversation: {e}")
+
+
+def update_share_permissions(conversation_id, share_permissions):
+    """Updates the share_permissions of a conversation."""
+    try:
+        result = conversations_collection.update_one(
+            {'_id': ObjectId(conversation_id)},
+            {'$set': {'share_permissions': share_permissions}}
+        )
+        return result.modified_count > 0
+    except Exception as e:
+        print(f"Error updating share permissions: {e}")
+        return False
 
 
 def get_document_version_content(conversation_id, version_number):

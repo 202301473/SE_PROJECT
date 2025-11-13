@@ -107,7 +107,7 @@ const LawyerDashboard = () => {
 
   return (
     <div className="container mx-auto py-10 animate-fade-in space-y-8">
-      <Card className="bg-gray-800/40 border border-gray-700/50 backdrop-blur-sm">
+      <Card className="bg-card border-border backdrop-blur-sm">
         <CardHeader>
           <div className="flex items-center gap-3">
             <BadgeCheck className="w-10 h-10 text-blue-400" />
@@ -146,93 +146,92 @@ const LawyerDashboard = () => {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-gray-800/40 border border-gray-700/50">
+        <Card className="bg-card border-border">
           <CardContent className="p-5">
-            <p className="text-gray-400 text-sm">Total Requests</p>
-            <p className="text-2xl font-bold text-white">{summary.total_requests}</p>
+            <p className="text-muted-foreground text-sm">Total Requests</p>
+            <p className="text-2xl font-bold text-foreground">{summary.total_requests}</p>
           </CardContent>
         </Card>
-        <Card className="bg-gray-800/40 border border-gray-700/50">
+        <Card className="bg-card border-border">
           <CardContent className="p-5">
-            <p className="text-gray-400 text-sm">Pending</p>
+            <p className="text-muted-foreground text-sm">Pending</p>
             <p className="text-2xl font-bold text-yellow-300">{summary.pending_requests}</p>
           </CardContent>
         </Card>
-        <Card className="bg-gray-800/40 border border-gray-700/50">
+        <Card className="bg-card border-border">
           <CardContent className="p-5">
-            <p className="text-gray-400 text-sm">Accepted</p>
+            <p className="text-muted-foreground text-sm">Accepted</p>
             <p className="text-2xl font-bold text-green-300">{summary.accepted_requests}</p>
           </CardContent>
         </Card>
-        <Card className="bg-gray-800/40 border border-gray-700/50">
+        <Card className="bg-card border-border">
           <CardContent className="p-5">
-            <p className="text-gray-400 text-sm">Declined</p>
+            <p className="text-muted-foreground text-sm">Declined</p>
             <p className="text-2xl font-bold text-red-300">{summary.declined_requests}</p>
           </CardContent>
         </Card>
       </div>
 
-      <Card className="bg-gray-800/40 border border-gray-700/50">
+      <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-white text-xl">Connection Requests</CardTitle>
-          <CardDescription className="text-gray-400">
+          <CardTitle className="text-foreground text-xl">Connection Requests</CardTitle>
+          <CardDescription className="text-muted-foreground">
             Respond to clients who want to connect with you.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {connections.length === 0 && (
-            <div className="text-center text-gray-400 py-6">No connection requests yet.</div>
+            <div className="text-center text-muted-foreground py-6">No connection requests yet.</div>
           )}
           {connections.map((connection) => (
             <div
               key={connection.id}
-              className="border border-gray-700/50 rounded-lg p-4 bg-gray-900/30 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+              className="border-border rounded-lg p-4 bg-background/30 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
             >
               <div>
-                <p className="text-white font-semibold">
+                <p className="text-foreground font-semibold">
                   {connection.client?.name || connection.client?.username || "Client"}
                 </p>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Contact: {connection.preferred_contact_value || connection.client?.email || "Not provided"}
                 </p>
                 {connection.preferred_time && (
-                  <p className="text-sm text-gray-400 mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     Preferred time: {formatDateTime(connection.preferred_time)}
                   </p>
                 )}
                 {connection.meeting_link && (
-                  <p className="text-sm text-blue-400 mt-1">
+                  <p className="text-sm text-primary mt-1">
                     Google Meet:{" "}
                     <a
                       href={connection.meeting_link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="underline hover:text-blue-300"
+                      className="underline hover:text-primary/80"
                     >
                       {connection.meeting_link}
                     </a>
                   </p>
                 )}
                 {connection.message && (
-                  <p className="text-sm text-gray-300 mt-2 whitespace-pre-wrap">
+                  <p className="text-sm text-foreground mt-2 whitespace-pre-wrap">
                     “{connection.message}”
                   </p>
                 )}
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-muted-foreground/80 mt-2">
                   Status: <span className="uppercase">{connection.status}</span>
                 </p>
               </div>
               {connection.status === "pending" && (
                 <div className="flex gap-2">
                   <Button
-                    className="bg-green-600 hover:bg-green-700 text-white"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
                     onClick={() => handleConnectionUpdate(connection.id, "accepted")}
                   >
                     Accept
                   </Button>
                   <Button
-                    variant="outline"
-                    className="border-red-500/60 text-red-400 hover:bg-red-500/10"
+                    variant="destructive"
                     onClick={() => handleConnectionUpdate(connection.id, "declined")}
                   >
                     Decline
