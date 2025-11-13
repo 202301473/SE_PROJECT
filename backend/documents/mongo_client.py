@@ -143,7 +143,7 @@ def update_share_permissions(conversation_id, share_permissions):
             {'_id': ObjectId(conversation_id)},
             {'$set': {'share_permissions': share_permissions}}
         )
-        return result.modified_count > 0
+        return result.matched_count > 0
     except Exception as e:
         print(f"Error updating share permissions: {e}")
         return False
