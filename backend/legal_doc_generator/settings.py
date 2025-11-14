@@ -18,7 +18,35 @@ import dj_database_url
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(os.path.join(BASE_DIR, '.env'))
+# Force override=True to ensure .env file takes precedence over system env vars
+load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
+
+# MongoDB MUST be configured BEFORE anything else to prevent lazy connections
+import mongoengine
+MONGO_URI = os.getenv("MONGO_URI")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "legal_document_navigator_db")
+
+if not MONGO_URI:
+    raise ValueError("❌ MONGO_URI environment variable is not set. Please configure it in your .env file.")
+
+# Disconnect all existing connections first to prevent conflicts
+mongoengine.disconnect_all()
+
+# Connect directly with the 'default' alias
+try:
+    mongoengine.connect(
+        db=MONGO_DB_NAME,
+        host=MONGO_URI,
+        alias='default',
+        serverSelectionTimeoutMS=5000,
+        connectTimeoutMS=10000,
+        socketTimeoutMS=10000,
+        uuidRepresentation='standard'
+    )
+    print(f"✅ MongoDB connected successfully: {MONGO_DB_NAME}")
+except Exception as e:
+    print(f"❌ Failed to connect to MongoDB: {e}")
+    raise
 
 
 # Quick-start development settings - unsuitable for production
@@ -184,14 +212,8 @@ cloudinary.config(
     api_secret = os.getenv("CLOUDINARY_API_SECRET"),
     secure=True
 )
-
-# MongoDB configuration
-MONGO_URI = os.getenv("MONGO_URI")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "legal_document_navigator_db")
-
-if MONGO_URI:
-    import mongoengine
-    mongoengine.connect(host=MONGO_URI)
+# MongoDB connection is now configured at the top of this file (before INSTALLED_APPS)
+# This prevents lazy connections to localhost:27017
 
 AUTHENTICATION_BACKENDS = ['authentication.backends.EmailBackend']
 
