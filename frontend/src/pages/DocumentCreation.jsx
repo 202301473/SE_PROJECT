@@ -57,6 +57,7 @@ const DocumentCreation = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [finalDocument, setFinalDocument] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+
   const chatContainerRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const [isVersionsSidebarOpen, setIsVersionsSidebarOpen] = useState(false);

@@ -7,18 +7,9 @@ import { Button } from "@/Components/ui/Button";
 import { Input } from "@/Components/ui/Input"; // Added Input import
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/Components/ui/Card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/Components/ui/Tabs"; // Import Tabs components
-import ReactMarkdown from 'react-markdown'; // Import ReactMarkdown
-import remarkGfm from 'remark-gfm'; // Import remarkGfm for GitHub Flavored Markdown
-
 import { Edit, Save, XCircle } from 'lucide-react'; // Add new icons
 import ShareModal from '../Components/ShareModal';
 import { useAuth } from '../context/AuthContext'; // Import useAuth to get current user
-
-const truncateText = (text, maxLength) => {
-  if (!text) return '';
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength) + '...';
-};
 
 const MyDocuments = () => {
   const { user } = useAuth(); // Get current user from AuthContext
@@ -186,7 +177,7 @@ const MyDocuments = () => {
                 </Button>
               </div>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
                 {myDocumentsList.map((doc) => (
                   <Card key={doc._id} className="bg-card/60 border-border/50 shadow-lg hover:shadow-xl transition-all duration-300 flex flex-col">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -208,7 +199,7 @@ const MyDocuments = () => {
                           </Button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-grow min-w-0">
                           <CardTitle className="text-primary text-xl truncate">{doc.title}</CardTitle>
                           <Button size="icon" variant="ghost" onClick={() => handleEditClick(doc._id, doc.title)} title="Edit Title">
                             <Edit className="w-4 h-4 text-muted-foreground" />
@@ -219,11 +210,6 @@ const MyDocuments = () => {
                     <CardDescription className="text-muted-foreground text-sm px-6">
                       Created: {new Date(doc.created_at).toLocaleDateString()}
                     </CardDescription>
-                    <div className="text-muted-foreground text-xs px-6 pb-4 h-12 overflow-hidden markdown-preview">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {truncateText(doc.latest_document, 150)}
-                      </ReactMarkdown>
-                    </div>
                     <div className="p-4 border-t border-border/50 flex justify-between items-center gap-2">
                       <Button
                         size="sm"
@@ -282,25 +268,46 @@ const MyDocuments = () => {
                 <p className="text-lg text-muted-foreground mb-4">No documents shared with you.</p>
               </div>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
                 {sharedWithMeDocumentsList.map((doc) => (
                   <Card key={doc._id} className="bg-card/60 border-border/50 shadow-lg hover:shadow-xl transition-all duration-300 flex flex-col">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-primary text-xl truncate">{doc.title}</CardTitle>
-                      <span className="text-sm text-muted-foreground">Shared by: {doc.owner}</span>
+                      {editingDocId === doc._id ? (
+                        <div className="flex-grow flex items-center gap-2">
+                          <Input
+                            value={newTitle}
+                            onChange={(e) => setNewTitle(e.target.value)}
+                            className="text-primary text-xl font-bold bg-input border-border/50"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') handleSaveTitle(doc._id);
+                            }}
+                          />
+                          <Button size="icon" variant="ghost" onClick={() => handleSaveTitle(doc._id)} title="Save Title">
+                            <Save className="w-4 h-4 text-green-500" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={handleCancelEdit} title="Cancel Edit">
+                            <XCircle className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 flex-grow min-w-0">
+                          <CardTitle className="text-primary text-xl truncate">{doc.title}</CardTitle>
+                          {doc.shared_with_users?.find(u => u.username === user.username)?.permission === 'edit' && (
+                            <Button size="icon" variant="ghost" onClick={() => handleEditClick(doc._id, doc.title)} title="Edit Title">
+                              <Edit className="w-4 h-4 text-muted-foreground" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      <span className="text-sm text-muted-foreground flex-shrink-0">Shared by: {doc.owner}</span>
                     </CardHeader>
                     <CardDescription className="text-muted-foreground text-sm px-6">
                       Created: {new Date(doc.created_at).toLocaleDateString()}
                     </CardDescription>
-                    <div className="text-muted-foreground text-xs px-6 pb-4 h-12 overflow-hidden markdown-preview">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {truncateText(doc.latest_document, 150)}
-                      </ReactMarkdown>
-                    </div>
                     <div className="p-4 border-t border-border/50 flex justify-between items-center gap-2">
                       <Button
                         size="sm"
-                        onClick={() => handleViewDocument(doc._id)}
+                        onClick={() => navigate(`/documentShare/${doc._id}`)}
                         className="bg-primary hover:bg-primary/80 text-foreground transition-all flex-grow"
                       >
                         <FileText className="w-4 h-4 mr-2" />
