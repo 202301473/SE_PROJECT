@@ -10,14 +10,28 @@ const LawyerConnect = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [lawyers, setLawyers] = useState([]);
+  const [filteredLawyers, setFilteredLawyers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedSpecialization, setSelectedSpecialization] = useState('');
+  const [allSpecializations, setAllSpecializations] = useState([]);
 
   useEffect(() => {
     const fetchLawyers = async () => {
       try {
         const response = await axios.get('api/auth/lawyers/');
-        setLawyers(response.data || []);
+        const lawyersData = response.data || [];
+        setLawyers(lawyersData);
+        setFilteredLawyers(lawyersData);
+        
+        // Extract all unique specializations
+        const specializations = new Set();
+        lawyersData.forEach(lawyer => {
+          if (lawyer.specializations && Array.isArray(lawyer.specializations)) {
+            lawyer.specializations.forEach(spec => specializations.add(spec));
+          }
+        });
+        setAllSpecializations(Array.from(specializations).sort());
       } catch (err) {
         console.error('Failed to load lawyers:', err);
         setError('Failed to load lawyers. Please try again later.');
@@ -28,6 +42,21 @@ const LawyerConnect = () => {
 
     fetchLawyers();
   }, []);
+
+  useEffect(() => {
+    if (selectedSpecialization) {
+      const filtered = lawyers.filter(lawyer => 
+        lawyer.specializations && 
+        Array.isArray(lawyer.specializations) &&
+        lawyer.specializations.some(spec => 
+          spec.toLowerCase().includes(selectedSpecialization.toLowerCase())
+        )
+      );
+      setFilteredLawyers(filtered);
+    } else {
+      setFilteredLawyers(lawyers);
+    }
+  }, [selectedSpecialization, lawyers]);
 
   const handleConnect = async (lawyer) => {
     if (!lawyer?.user?.id) return;
@@ -100,12 +129,14 @@ const LawyerConnect = () => {
         <div className="text-center text-red-400">{error}</div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {!loading && !error && lawyers.length === 0 && (
+        {!loading && !error && filteredLawyers.length === 0 && (
           <div className="col-span-full text-center text-gray-400">
-            No verified lawyers are available yet. Please check back soon.
+            {selectedSpecialization 
+              ? `No lawyers found with specialization "${selectedSpecialization}".`
+              : 'No verified lawyers are available yet. Please check back soon.'}
           </div>
         )}
-        {lawyers.map((lawyer, index) => (
+        {filteredLawyers.map((lawyer, index) => (
           <Card
             key={lawyer.id || lawyer.user?.id || index}
             className="bg-card backdrop-blur-sm border-border hover:border-primary/60 transition-all duration-200 p-5 flex flex-col group animate-fade-in-up"

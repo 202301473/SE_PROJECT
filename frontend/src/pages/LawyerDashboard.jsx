@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/Components/ui/Card";
 import { Button } from "@/Components/ui/Button";
-import { BadgeCheck, Clock, ShieldAlert } from "lucide-react";
+import { BadgeCheck, Clock, ShieldAlert, MessageSquare } from "lucide-react";
 
 const statusColors = {
   pending: "text-yellow-400",
@@ -63,19 +63,17 @@ const LawyerDashboard = () => {
     try {
       const response = await axios.patch(`api/auth/lawyer/connections/${requestId}/`, { status });
       toast.success(response.data?.message || "Connection updated.");
-      setDashboard((prev) => {
-        if (!prev) return prev;
-        const updatedConnections = prev.connections.map((connection) =>
-          connection.id === requestId ? response.data.request : connection
-        );
-        const summary = {
-          total_requests: updatedConnections.length,
-          pending_requests: updatedConnections.filter((c) => c.status === "pending").length,
-          accepted_requests: updatedConnections.filter((c) => c.status === "accepted").length,
-          declined_requests: updatedConnections.filter((c) => c.status === "declined").length,
-        };
-        return { ...prev, connections: updatedConnections, summary };
-      });
+      
+      // Reload dashboard to get updated data including new chat conversations
+      const dashboardResponse = await axios.get("api/auth/lawyer/dashboard/");
+      setDashboard(dashboardResponse.data);
+      
+      // If accepted, show option to open chat
+      if (status === 'accepted') {
+        setTimeout(() => {
+          toast.success('Connection accepted! You can now chat with the client.', { duration: 4000 });
+        }, 500);
+      }
     } catch (err) {
       console.error("Failed to update connection request:", err);
       toast.error(err.response?.data?.error || "Unable to update request.");
@@ -237,6 +235,56 @@ const LawyerDashboard = () => {
                     Decline
                   </Button>
                 </div>
+              )}
+              {connection.status === "accepted" && (
+                <Button
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={async () => {
+                    try {
+                      console.log('Opening chat for connection:', connection.id);
+                      
+                      // Try to get conversation by connection_request_id
+                      const convResponse = await axios.get(
+                        `api/auth/chat/conversations/?connection_request_id=${connection.id}`
+                      );
+                      
+                      console.log('Conversation response:', convResponse.data);
+                      
+                      if (convResponse.data && convResponse.data.id) {
+                        navigate(`/chat/${convResponse.data.id}`);
+                        return;
+                      }
+                      
+                      // Fallback: search all conversations
+                      console.log('Fallback: searching all conversations');
+                      const allConvsResponse = await axios.get('api/auth/chat/conversations/');
+                      console.log('All conversations:', allConvsResponse.data);
+                      
+                      const conv = allConvsResponse.data.find(c => {
+                        const matchesConnectionId = c.connection_request_id === connection.id;
+                        const matchesUsers = c.client?.id === connection.client?.id && 
+                                           c.lawyer?.id === connection.lawyer?.id;
+                        return matchesConnectionId || matchesUsers;
+                      });
+                      
+                      if (conv) {
+                        console.log('Found conversation:', conv.id);
+                        navigate(`/chat/${conv.id}`);
+                      } else {
+                        console.error('No conversation found for connection:', connection.id);
+                        toast.error('Chat conversation not found. Please refresh the page and try again.');
+                      }
+                    } catch (err) {
+                      console.error('Failed to load conversation:', err);
+                      console.error('Error details:', err.response?.data);
+                      const errorMsg = err.response?.data?.error || err.message || 'Failed to open chat';
+                      toast.error(errorMsg);
+                    }
+                  }}
+                >
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Open Chat
+                </Button>
               )}
             </div>
           ))}

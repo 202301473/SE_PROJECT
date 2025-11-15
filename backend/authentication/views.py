@@ -8,7 +8,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 from django.conf import settings
 from mongoengine import DoesNotExist
-from .models import User, LawyerProfile, LawyerConnectionRequest
+from .models import User, ChatConversation, ChatMessage, LawyerProfile, LawyerConnectionRequest
 import random
 import cloudinary
 import cloudinary.uploader
@@ -18,6 +18,8 @@ from .serializers import (
     LoginSerializer,
     UserSerializer,
     GoogleAuthSerializer,
+    ChatMessageSerializer,
+    ChatConversationSerializer,
     VerifyOTPSerializer,
     ResendOTPSerializer,
     UserProfileSerializer,
@@ -46,33 +48,44 @@ def get_tokens_for_user(user):
 @permission_classes([AllowAny])
 def signup_view(request):
     """Register new user and send OTP for verification"""
-    serializer = RegisterSerializer(data=request.data)
-    if serializer.is_valid():
-        user = serializer.save()
-        # User is not verified yet, send OTP
-        user.is_verified = False
-        user.save()
-        
-        # Generate and send OTP
-        otp_sent = create_and_send_otp(user)
-        
-        if not otp_sent:
-            return Response({
-                'error': 'Failed to send OTP. Please try again.'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        response_payload = {
-            'message': 'Registration successful. OTP sent to your email. Please verify to continue.',
-            'email': user.email,
-            'requires_verification': True,
-            'redirect': 'verify-otp',
-            'role': user.role,
-            'lawyer_verification_status': user.lawyer_verification_status,
-        }
-        if user.role == 'lawyer':
-            response_payload['lawyer_message'] = 'Your lawyer profile is pending verification. Our team will review your credentials shortly.'
-        return Response(response_payload, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        serializer = RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            # User is not verified yet, send OTP
+            user.is_verified = False
+            user.save()
+            
+            # Generate and send OTP
+            otp_sent = create_and_send_otp(user)
+            
+            if not otp_sent:
+                return Response({
+                    'error': 'Failed to send OTP. Please try again.'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            response_payload = {
+                'message': 'Registration successful. OTP sent to your email. Please verify to continue.',
+                'email': user.email,
+                'requires_verification': True,
+                'redirect': 'verify-otp',
+                'role': user.role,
+                'lawyer_verification_status': user.lawyer_verification_status,
+            }
+            if user.role == 'lawyer':
+                response_payload['lawyer_message'] = 'Your lawyer profile is pending verification. Our team will review your credentials shortly.'
+            return Response(response_payload, status=status.HTTP_201_CREATED)
+        return Response({
+            'error': 'Validation failed',
+            'details': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'error': 'An error occurred during registration',
+            'details': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -341,7 +354,7 @@ def resend_otp_view(request):
         
     if user.is_verified:
         return Response({
-            'message': 'User is already verified.'
+            'message': 'User is already verified.' 
         }, status=status.HTTP_400_BAD_REQUEST)
         
     otp_sent = create_and_send_otp(user)
@@ -371,8 +384,13 @@ def logout_view(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def lawyer_list_view(request):
-    """List approved lawyers"""
-    profiles = LawyerProfile.objects.all()
+    """List approved lawyers with optional specialization filter"""
+    specialization = request.query_params.get('specialization', '').strip()
+    profiles = LawyerProfile.objects(verification_status='approved')
+    
+    if specialization:
+        profiles = profiles.filter(specializations__icontains=specialization)
+    
     serializer = LawyerProfileSerializer(profiles, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -507,6 +525,35 @@ def lawyer_connection_update_view(request, connection_id):
     connection_request.message = serializer.validated_data.get('message', connection_request.message)
     connection_request.save()
 
+    # Create chat conversation when lawyer accepts
+    if new_status == 'accepted':
+        existing_chat = ChatConversation.objects(
+            connection_request=connection_request
+        ).first()
+        if not existing_chat:
+            try:
+                chat_conversation = ChatConversation.objects.create(
+                    connection_request=connection_request,
+                    client=connection_request.client,
+                    lawyer=connection_request.lawyer,
+                    is_active=True,
+                )
+                print(f"Created chat conversation {chat_conversation.id} for connection {connection_request.id}")
+                
+                # Send welcome message
+                welcome_msg = f"Connection accepted! You can now chat with {connection_request.client.name or connection_request.client.username}."
+                ChatMessage.objects.create(
+                    conversation=chat_conversation,
+                    sender=request.user,
+                    message=welcome_msg,
+                    message_type='system',
+                )
+                print(f"Created welcome message for conversation {chat_conversation.id}")
+            except Exception as e:
+                print(f"Error creating chat conversation: {e}")
+                import traceback
+                traceback.print_exc()
+
     response_serializer = LawyerConnectionRequestSerializer(connection_request)
     return Response({
         'message': f'Connection request {new_status}.',
@@ -597,3 +644,144 @@ def reset_password_view(request):
     return Response({
         'message': 'Password reset successfully. Please login with your new password.'
     }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def chat_conversations_list_view(request):
+    """List all chat conversations for the authenticated user"""
+    user = request.user
+    connection_request_id = request.query_params.get('connection_request_id')
+    
+    if connection_request_id:
+        # Get conversation by connection request ID
+        from .models import LawyerConnectionRequest
+        try:
+            connection_request = LawyerConnectionRequest.objects(id=connection_request_id).first()
+            if not connection_request:
+                return Response({'error': 'Connection request not found.'}, status=status.HTTP_404_NOT_FOUND)
+            
+            conversation = ChatConversation.objects(
+                connection_request=connection_request,
+                is_active=True
+            ).first()
+        except Exception as e:
+            return Response({'error': f'Invalid connection request ID: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not conversation:
+            if connection_request.status != 'accepted':
+                return Response({'error': 'Connection request is not accepted yet.'}, status=status.HTTP_400_BAD_REQUEST)
+            # Create the conversation on demand
+            conversation = ChatConversation.objects.create(
+                connection_request=connection_request,
+                client=connection_request.client,
+                lawyer=connection_request.lawyer,
+                is_active=True,
+            )
+            ChatMessage.objects.create(
+                conversation=conversation,
+                sender=request.user,
+                message='Conversation started.',
+                message_type='system',
+            )
+        
+        if not conversation:
+            return Response({'error': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user is part of the conversation
+        if str(conversation.client.id) != str(user.id) and str(conversation.lawyer.id) != str(user.id):
+            return Response({'error': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = ChatConversationSerializer(conversation, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    # List all conversations for the user
+    # Get all conversations and filter in Python (more reliable with MongoEngine ReferenceFields)
+    all_conversations = ChatConversation.objects(is_active=True).order_by('-updated_at')
+    user_conversations = []
+    user_id_str = str(user.id)
+    
+    for conv in all_conversations:
+        try:
+            client_id = str(conv.client.id) if conv.client else None
+            lawyer_id = str(conv.lawyer.id) if conv.lawyer else None
+            
+            if client_id == user_id_str or lawyer_id == user_id_str:
+                user_conversations.append(conv)
+        except Exception as e:
+            # Skip conversations with invalid references
+            print(f"Error processing conversation {conv.id}: {e}")
+            continue
+    
+    serializer = ChatConversationSerializer(user_conversations, many=True, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def chat_messages_view(request, conversation_id):
+    """Get messages for a conversation or send a new message"""
+    conversation = ChatConversation.objects(id=conversation_id).first()
+    if not conversation:
+        return Response({'error': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Check if user is part of the conversation
+    user = request.user
+    if str(conversation.client.id) != str(user.id) and str(conversation.lawyer.id) != str(user.id):
+        return Response({'error': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    if request.method == 'GET':
+        messages = ChatMessage.objects(conversation=conversation).order_by('created_at')
+        print(f"Found {messages.count()} messages for conversation {conversation_id}")
+        
+        serializer = ChatMessageSerializer(messages, many=True)
+        print(f"Serialized {len(serializer.data)} messages")
+        
+        # Mark messages as read (exclude messages sent by current user)
+        unread_messages = ChatMessage.objects(
+            conversation=conversation,
+            is_read=False
+        )
+        for msg in unread_messages:
+            if str(msg.sender.id) != str(user.id):
+                msg.is_read = True
+                msg.save()
+        
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    elif request.method == 'POST':
+        message_text = request.data.get('message', '').strip()
+        message_type = request.data.get('message_type', 'text')
+        document_id = request.data.get('document_id', '')
+        document_title = request.data.get('document_title', '')
+        
+        if not message_text and message_type != 'document':
+            return Response({'error': 'Message cannot be empty.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if message_type == 'document' and not document_id:
+            return Response({'error': 'Document ID is required for document messages.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            chat_message = ChatMessage.objects.create(
+                conversation=conversation,
+                sender=user,
+                message=message_text or f'Shared document: {document_title}',
+                message_type=message_type,
+                document_id=document_id,
+                document_title=document_title,
+                is_read=False,
+            )
+            print(f"Created message {chat_message.id} in conversation {conversation_id}")
+            print(f"Message content: {chat_message.message}")
+            print(f"Sender: {chat_message.sender.id}")
+            
+            # Update conversation timestamp
+            conversation.save()
+            
+            serializer = ChatMessageSerializer(chat_message)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            print(f"Error creating message: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({'error': f'Failed to create message: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

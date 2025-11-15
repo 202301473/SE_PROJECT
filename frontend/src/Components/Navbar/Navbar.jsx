@@ -31,6 +31,10 @@ export default function Navbar() {
     { to: "/my-documents", label: "My Documents", requiresAuth: true },
   ];
 
+  if (isAuthenticated) {
+    navLinks.push({ to: "/chat", label: "Messages", requiresAuth: true });
+  }
+
   if (isAuthenticated && user?.role === 'lawyer') {
     navLinks.push({ to: "/lawyer-dashboard", label: "Lawyer Dashboard", requiresAuth: true });
   }

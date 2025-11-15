@@ -19,6 +19,8 @@ import MyDocuments from "./pages/MyDocuments";
 import DocumentCreation from "./pages/DocumentCreation";
 import DocumentVersions from "./pages/DocumentVersions"; // Added this import
 import SharedDocumentView from "./pages/SharedDocumentView";
+import ChatList from "./pages/ChatList";
+import Chat from "./pages/Chat";
 import ParticlesComponent from "./Components/Particles";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -131,6 +133,22 @@ function AppContent() {
             element={(
               <ProtectedRoute>
                 <SharedDocumentView />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/chat"
+            element={(
+              <ProtectedRoute>
+                <ChatList />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/chat/:conversationId"
+            element={(
+              <ProtectedRoute>
+                <Chat />
               </ProtectedRoute>
             )}
           />
