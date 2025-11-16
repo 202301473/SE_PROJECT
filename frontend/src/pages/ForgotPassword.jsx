@@ -1,8 +1,8 @@
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
-import { Button } from "@/Components/ui/Button";
+import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/Input";
 import { Label } from "@/Components/ui/Label";
 
@@ -14,13 +14,14 @@ const ForgotPassword = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     try {
-      const response = await axios.post('/api/auth/forgot-password/', { email });
+      const response = await axios.post('api/auth/forgot-password/', { email });
       toast.success(response.data.message);
-      navigate('/reset-password', { state: { email } }); // Pass email to reset password page
+      navigate('/reset-password', { state: { email } });
     } catch (error) {
-      console.error('Forgot password failed:', error);
-      toast.error(error.response?.data?.error || 'Failed to send OTP.');
+      console.error('Forgot password error:', error);
+      toast.error(error.response?.data?.error || 'Failed to send reset code.');
     } finally {
       setLoading(false);
     }
@@ -40,12 +41,12 @@ const ForgotPassword = () => {
       <div className="w-full max-w-md p-8 space-y-6 bg-card/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-border/50 relative z-10 animate-fade-in">
         <div className="text-center">
           <div className="inline-block mb-4 px-4 py-2 bg-primary/20 rounded-full border border-primary/30">
-            <span className="text-primary text-sm font-semibold">Forgot Password</span>
+            <span className="text-primary text-sm font-semibold">Password Recovery</span>
           </div>
           <h1 className="text-4xl font-extrabold text-foreground mb-2 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
-            Reset Your Password
+            Forgot Password
           </h1>
-          <p className="text-muted-foreground">Enter your email address to receive a password reset OTP.</p>
+          <p className="text-muted-foreground">Enter your email to receive a reset code</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -68,7 +69,7 @@ const ForgotPassword = () => {
             className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-foreground shadow-lg shadow-primary/50 hover:shadow-xl hover:shadow-primary/60 transition-all duration-300" 
             disabled={loading}
           >
-            {loading ? 'Sending OTP...' : 'Send Reset OTP'}
+            {loading ? 'Sending...' : 'Send Reset Code'}
           </Button>
         </form>
 

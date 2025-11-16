@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/Com
 import { Label } from "@/Components/ui/Label";
 import axios from "../api/axios";
 import toast from "react-hot-toast";
-import { Button } from "@/Components/ui/Button";
+import { Button } from "@/Components/ui/button";
 import { useAuth } from "../context/AuthContext";
 import ConnectModal from "../Components/ConnectModal";
 

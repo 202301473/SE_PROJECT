@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
-import { Button } from "@/Components/ui/Button";
+import { useAuth } from '../context/AuthContext';
+import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/Input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/Components/ui/Card";
 
 const VerifyOtp = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { setUser, setIsAuthenticated } = useAuth();
   const email = location.state?.email;
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,7 +27,18 @@ const VerifyOtp = () => {
     try {
       const response = await axios.post('api/auth/verify-otp/', { email, otp_code: otp });
       toast.success(response.data.message);
-      navigate('/login');
+      
+      // Store tokens and user data if provided
+      if (response.data.tokens) {
+        const { access, refresh } = response.data.tokens;
+        localStorage.setItem('access_token', access);
+        localStorage.setItem('refresh_token', refresh);
+        setUser(response.data.user);
+        setIsAuthenticated(true);
+        navigate('/');
+      } else {
+        navigate('/login');
+      }
     } catch (error) {
       console.error('OTP verification error:', error);
       toast.error(error.response?.data?.error || 'OTP verification failed.');

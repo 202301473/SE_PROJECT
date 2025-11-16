@@ -5,7 +5,7 @@ import { FileText, Download, History } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { saveAs } from 'file-saver';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/Components/ui/Card';
-import { Button } from '@/Components/ui/Button';
+import { Button } from '@/Components/ui/button';
 
 const DocumentVersions = () => {
   const { id } = useParams(); // conversation ID

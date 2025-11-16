@@ -6,7 +6,7 @@ import { saveAs } from 'file-saver';
 import '../styles/MarkdownPreview.css';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
-import { Button } from "@/Components/ui/Button";
+import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/Input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/Components/ui/Card";
 
