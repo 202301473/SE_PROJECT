@@ -4,7 +4,7 @@ import axios from '../api/axios';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent } from "@/Components/ui/Card";
-import { Button } from "@/Components/ui/Button";
+import { Button } from "@/Components/ui/button";
 import { MessageSquare, ArrowRight, Clock } from 'lucide-react';
 
 const ChatList = () => {
