@@ -1,4 +1,12 @@
-from mongoengine import Document, StringField, DateTimeField, BooleanField, ReferenceField
+from mongoengine import (
+    Document,
+    StringField,
+    DateTimeField,
+    BooleanField,
+    ReferenceField,
+    ListField,
+    DictField,
+)
 from datetime import datetime
 from authentication.models import User
 
@@ -7,6 +15,8 @@ class DocumentSession(Document):
     user = ReferenceField(User, required=True)
     document_text = StringField(required=True)
     summary = StringField(required=True)
+    highlighted_preview = StringField()
+    high_risk_clauses = ListField(DictField())
     created_at = DateTimeField(default=datetime.utcnow)
     
     meta = {
