@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { X, Upload } from 'lucide-react';
 import { Button } from '@/Components/ui/button';
-import { Input } from '@/Components/ui/Input';
+import { Input } from '@/Components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/Card';
-import { Label } from '@/Components/ui/Label';
+import { Label } from '@/Components/ui/label';
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
 

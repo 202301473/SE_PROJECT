@@ -3,8 +3,8 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
 import { Button } from "@/Components/ui/button";
-import { Input } from "@/Components/ui/Input";
-import { Label } from "@/Components/ui/Label";
+import { Input } from "@/Components/ui/input";
+import { Label } from "@/Components/ui/label";
 
 const ResetPassword = () => {
   const location = useLocation();

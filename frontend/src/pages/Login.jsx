@@ -5,8 +5,8 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { GoogleLoginButton } from '@/Components/ui/GoogleLoginButton';
 import { Button } from "@/Components/ui/button";
-import { Input } from "@/Components/ui/Input";
-import { Label } from "@/Components/ui/Label";
+import { Input } from "@/Components/ui/input";
+import { Label } from "@/Components/ui/label";
 
 const Login = () => {
   const navigate = useNavigate();

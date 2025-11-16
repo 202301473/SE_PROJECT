@@ -7,7 +7,7 @@ import '../styles/MarkdownPreview.css';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
 import { Button } from "@/Components/ui/button";
-import { Input } from "@/Components/ui/Input";
+import { Input } from "@/Components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/Components/ui/Card";
 
 import { useEditor, EditorContent, Editor } from '@tiptap/react'; // Import Editor
