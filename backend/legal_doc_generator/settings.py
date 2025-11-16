@@ -68,7 +68,7 @@ if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -89,10 +89,13 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
     'ai_generator',
     'documents',
     'utils',
     'authentication',
+    'lawyer',
+    'chat',
     'document_summarizer',
     'corsheaders',
     'whitenoise.runserver_nostatic',
@@ -132,11 +135,24 @@ TEMPLATES = [
 WSGI_APPLICATION = 'legal_doc_generator.wsgi.application'
 ASGI_APPLICATION = 'legal_doc_generator.asgi.application' # Added for Django Channels
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer", # Use in-memory for development
-    },
-}
+if DEBUG:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer", # Use in-memory for development
+        },
+    }
+else:
+    # Production settings for CHANNEL_LAYERS using Redis
+    # You must set up a Redis server and provide the URL in the REDIS_URL environment variable
+    REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/1')
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+            },
+        },
+    }
 
 
 # Database

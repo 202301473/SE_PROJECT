@@ -25,5 +25,7 @@ urlpatterns = [
     path('api/documents/', include('documents.urls')),
     path('api/utils/', include('utils.urls')),
     path('api/auth/', include('authentication.urls')),
+    path('api/lawyer/', include('lawyer.urls')),
+    path('api/chat/', include('chat.urls')),
     path('api/summarizer/', include('document_summarizer.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
