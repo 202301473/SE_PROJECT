@@ -12,14 +12,56 @@ import {
   User,
   Copy,
   Check,
+  ShieldAlert,
+  Lightbulb,
+  Users,
+  DollarSign,
+  Calendar,
+  Clock,
+  BookOpen,
+  Maximize2,
 } from 'lucide-react';
 
 import { uploadDocument as uploadDocumentApi, getUserSessions as getUserSessionsApi, getChatHistory as getChatHistoryApi, sendChatMessage as sendChatMessageApi, } from '../utils/api';
+
+const SCORE_LABELS = {
+  5: 'Critical',
+  4: 'High',
+  3: 'Medium',
+  2: 'Low',
+  1: 'Minimal',
+};
+
+const coerceRiskScore = (value) => {
+  if (value === null || value === undefined) return null;
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return null;
+  return Math.min(5, Math.max(1, Math.round(numeric)));
+};
+
+const getRiskDisplay = (clause) => {
+  const score = coerceRiskScore(clause?.risk_score ?? clause?.riskScore);
+  const level = clause?.risk_level || clause?.riskLevel || (score ? SCORE_LABELS[score] : null);
+  return {
+    score,
+    level: level || 'High',
+  };
+};
+
+const getMitigation = (clause) => (clause?.mitigation || clause?.suggestion || clause?.recommendation || clause?.proposed_change || clause?.proposedChange || '').trim();
+
+const getReplacementClause = (clause) => (clause?.replacement_clause || clause?.replacementClause || clause?.alternate_clause || clause?.alternateClause || clause?.alternative_clause || clause?.alternativeClause || '').trim();
 
 const DocumentAnalyzer = () => {
   const fileInputRef = useRef(null);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [summary, setSummary] = useState('');
+  const [comprehensiveSummary, setComprehensiveSummary] = useState(null); // NEW: Structured detailed summary
+  const [comprehensiveSummaryLoading, setComprehensiveSummaryLoading] = useState(false); // Loading state
+  const [showDetailedSummary, setShowDetailedSummary] = useState(false); // Toggle for detailed view
+  const [highlightedPreview, setHighlightedPreview] = useState('');
+  const [previewText, setPreviewText] = useState('');
+  const [highRiskClauses, setHighRiskClauses] = useState([]);
   const [sessionId, setSessionId] = useState(null);
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
@@ -31,11 +73,18 @@ const DocumentAnalyzer = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [dragActive, setDragActive] = useState(false);
   const [isSummaryCopied, setIsSummaryCopied] = useState(false); // New state for copy status
+  const [expandedSection, setExpandedSection] = useState(null); // Modal state: 'preview', 'analysis', 'chat', or null
 
 
   const resetForNewDocument = () => {
     setUploadedFile(null);
     setSummary('');
+    setComprehensiveSummary(null);
+    setComprehensiveSummaryLoading(false);
+    setShowDetailedSummary(false);
+    setHighlightedPreview('');
+    setPreviewText('');
+    setHighRiskClauses([]);
     setSessionId(null);
     setChatHistory([]);
     setError('');
@@ -43,7 +92,23 @@ const DocumentAnalyzer = () => {
   };
 
   const handleCopySummary = () => {
-    navigator.clipboard.writeText(summary);
+    const riskSection = highRiskClauses.length
+      ? ['High Risk Clauses:', ...highRiskClauses.map((clause, index) => {
+          const { score, level } = getRiskDisplay(clause);
+          const badge = score ? `${level} (${score}/5)` : level;
+          const text = clause?.clause_text || clause?.clauseText || '';
+          const rationale = clause?.rationale || clause?.reason || '';
+          const mitigation = getMitigation(clause);
+          const replacement = getReplacementClause(clause);
+          const clauseLine = text ? `${index + 1}. [${badge}] ${text}` : `${index + 1}. [${badge}]`;
+          const rationaleLine = rationale ? `${clauseLine} — ${rationale}` : clauseLine;
+          const mitigationLine = mitigation ? `${rationaleLine}\n   Mitigation: ${mitigation}` : rationaleLine;
+          return replacement ? `${mitigationLine}\n   Alternate Clause: ${replacement}` : mitigationLine;
+        })].join('\n')
+      : 'High Risk Clauses: None flagged.';
+
+    const copyPayload = [summary, '', riskSection].filter(Boolean).join('\n').trim();
+    navigator.clipboard.writeText(copyPayload);
     setIsSummaryCopied(true);
     setTimeout(() => setIsSummaryCopied(false), 2000); // Reset after 2 seconds
   };
@@ -56,13 +121,35 @@ const DocumentAnalyzer = () => {
     setError('');
     setUploading(true);
     setSummary('');
+    setHighlightedPreview('');
+    setPreviewText('');
+    setHighRiskClauses([]);
 
     try {
       const response = await uploadDocumentApi(file);
 
+      const previewHtml = response?.highlighted_preview ?? response?.highlightedPreview ?? '';
+      const previewPlain = response?.preview_text ?? response?.previewText ?? '';
+      const riskClausesRaw = response?.high_risk_clauses ?? response?.highRiskClauses ?? response?.risk_clauses ?? [];
+
+      setHighlightedPreview(previewHtml || '');
+      setPreviewText(previewPlain || '');
+      setHighRiskClauses(Array.isArray(riskClausesRaw) ? riskClausesRaw : []);
+
       // Accept multiple possible shapes from backend
       const receivedSummary = response?.summary ?? response?.data?.summary ?? '';
+      const receivedComprehensiveSummary = response?.comprehensive_summary ?? response?.data?.comprehensive_summary ?? null;
       const receivedSessionId = response?.session_id ?? response?.sessionId ?? null;
+
+      // Store comprehensive summary if available
+      setComprehensiveSummaryLoading(false);
+      if (receivedComprehensiveSummary) {
+        setComprehensiveSummary(receivedComprehensiveSummary);
+        console.log('✅ Comprehensive summary received:', receivedComprehensiveSummary);
+      } else {
+        console.log('⚠️ No comprehensive_summary in response. Keys:', Object.keys(response || {}));
+        console.log('Full response:', response);
+      }
 
       // If backend didn't provide a session id, create a client-side one so chat works
       const finalSessionId = receivedSessionId ?? `local-${Date.now()}`;
@@ -97,6 +184,9 @@ const DocumentAnalyzer = () => {
       const message = err?.response?.data?.error || err?.message || 'Failed to upload document';
       setError(message);
       setUploadedFile(null);
+      setHighlightedPreview('');
+      setPreviewText('');
+      setHighRiskClauses([]);
     } finally {
       setUploading(false);
     }
@@ -178,6 +268,7 @@ const DocumentAnalyzer = () => {
 
   useEffect(() => {
     fetchSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchSessions = async () => {
@@ -212,7 +303,21 @@ const DocumentAnalyzer = () => {
 
       setChatHistory(messages);
       const sessionSummary = sessionInfo.summary ?? session.summary ?? session.summary_preview ?? '';
-      if (sessionSummary) setSummary(sessionSummary);
+      setSummary(sessionSummary || '');
+      
+      // Load comprehensive summary if available
+      const sessionComprehensiveSummary = sessionInfo.comprehensive_summary ?? session.comprehensive_summary ?? null;
+      if (sessionComprehensiveSummary) {
+        setComprehensiveSummary(sessionComprehensiveSummary);
+      }
+
+      const sessionPreviewHtml = sessionInfo.highlighted_preview ?? session.highlighted_preview ?? '';
+      const sessionPreviewPlain = sessionInfo.preview_text ?? session.document_preview ?? session.document_text ?? '';
+      const sessionRiskClauses = sessionInfo.high_risk_clauses ?? session.high_risk_clauses ?? [];
+
+      setHighlightedPreview(sessionPreviewHtml || '');
+      setPreviewText(sessionPreviewPlain || '');
+      setHighRiskClauses(Array.isArray(sessionRiskClauses) ? sessionRiskClauses : []);
     } catch (err) {
       console.error(err);
       const message = err?.response?.data?.error || err?.message || 'Failed to load session';
@@ -238,6 +343,28 @@ const DocumentAnalyzer = () => {
     return date.toLocaleDateString();
   };
 
+  const hasAnalysis = Boolean(summary || highlightedPreview || highRiskClauses.length);
+
+  // Modal component for expanded sections
+  const ExpandedModal = ({ section, onClose, children, title }) => (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 pt-20">
+      <div className="bg-card/95 backdrop-blur-xl rounded-2xl border border-border/50 w-full max-w-6xl max-h-[85vh] flex flex-col shadow-2xl">
+        <div className="p-6 border-b border-border/50 bg-gradient-to-r from-primary/5 to-secondary/5 flex items-center justify-between flex-shrink-0">
+          <h3 className="text-xl font-semibold text-foreground">{title}</h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-muted rounded-lg transition-colors"
+          >
+            <X className="w-6 h-6 text-muted-foreground" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex h-[89vh] bg-background">
       {/* Animated background effects */}
@@ -250,7 +377,7 @@ const DocumentAnalyzer = () => {
       </div>
 
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 h-full relative z-10`}>
+      <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 h-full relative z-[5]`}>
         <div className={`${sidebarOpen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300 bg-card/60 backdrop-blur-xl border-r border-border/50 flex flex-col h-full`}>
           {sidebarOpen && (
             <>
@@ -320,7 +447,7 @@ const DocumentAnalyzer = () => {
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
-          className="fixed left-0 top-1/2 -translate-y-1/2 p-3 bg-gradient-to-r from-primary to-secondary text-foreground rounded-r-xl shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-200 z-20"
+          className="fixed left-0 top-1/2 -translate-y-1/2 p-3 bg-gradient-to-r from-primary to-secondary text-foreground rounded-r-xl shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-200 z-[5]"
         >
           <History className="w-5 h-5" />
         </button>
@@ -330,7 +457,7 @@ const DocumentAnalyzer = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="max-w-7xl mx-auto p-6 lg:p-12 flex-1 flex flex-col w-full h-full">
           {/* Upload / Summary header */}
-          {!summary ? (
+          {!hasAnalysis ? (
             <div className="mb-8">
               <div
                 className={`relative overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-300 ${
@@ -419,20 +546,378 @@ const DocumentAnalyzer = () => {
           )}
 
           {/* Analysis & Chat Grid */}
-          {summary && (
-            <div className="grid lg:grid-cols-5 gap-6 h-[60vh]">
-              {/* Analysis Results */}
-             
+          {hasAnalysis && (
+            <div className="grid lg:grid-cols-3 gap-6 h-[60vh]">
+              {/* Left Column: Document Preview + Analysis */}
+              <div className="lg:col-span-2 flex flex-col gap-6 h-[60vh] overflow-y-auto custom-scrollbar">
+                {/* Document Preview */}
+                <div className="bg-card/40 backdrop-blur-xl rounded-2xl border border-border/50 overflow-hidden">
+                  <div className="p-6 border-b border-border/50 bg-gradient-to-r from-primary/5 to-secondary/5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
+                        <FileText className="w-5 h-5 text-foreground" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-foreground">Document Preview</h3>
+                        <p className="text-sm text-muted-foreground">Highlighted clauses mark elevated risk</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {highRiskClauses.length > 0 && (
+                        <span className="text-xs font-medium text-destructive bg-destructive/20 px-3 py-1 rounded-full">
+                          {highRiskClauses.length} flagged
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setExpandedSection('preview')}
+                        className="p-2 hover:bg-primary/10 rounded-lg transition-colors group"
+                        title="Expand preview"
+                      >
+                        <Maximize2 className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-6 max-h-96 overflow-y-auto custom-scrollbar">
+                    {highlightedPreview ? (
+                      <div
+                        className="text-sm leading-relaxed text-muted-foreground space-y-3"
+                        dangerouslySetInnerHTML={{ __html: highlightedPreview }}
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                        {previewText || 'Preview not available for this document.'}
+                      </p>
+                    )}
+                  </div>
+                </div>
 
-              {/* Chat Interface */}
-              <div className="lg:col-span-3 flex flex-col h-[60vh]">
+                {/* Analysis Section */}
+                <div className="bg-card/40 backdrop-blur-xl rounded-2xl border border-border/50 overflow-hidden flex flex-col">
+                  <div className="p-6 border-b border-border/50 bg-gradient-to-r from-primary/5 to-secondary/5 flex-shrink-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
+                          <Bot className="w-5 h-5 text-foreground" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-foreground">Analysis</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleCopySummary}
+                          disabled={!summary && !highRiskClauses.length}
+                          className="px-3 py-1.5 bg-gradient-to-r from-primary to-secondary text-foreground rounded-lg font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isSummaryCopied ? (
+                            <>
+                              <Check className="w-4 h-4" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setExpandedSection('analysis')}
+                          className="p-2 hover:bg-primary/10 rounded-lg transition-colors group"
+                          title="Expand analysis"
+                        >
+                          <Maximize2 className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">AI-generated insights</p>
+                  </div>
+                  <div className="p-6 overflow-y-auto custom-scrollbar max-h-[500px]">
+                    <div className="space-y-6">
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-sm font-semibold text-foreground">Summary</h4>
+                          <button
+                            onClick={() => setShowDetailedSummary(!showDetailedSummary)}
+                            disabled={!comprehensiveSummary}
+                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-gradient-to-r from-primary/20 to-secondary/20 text-primary rounded-lg hover:from-primary/30 hover:to-secondary/30 transition-all duration-200 font-medium border border-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {showDetailedSummary ? (
+                              <>
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Quick View</span>
+                              </>
+                            ) : (
+                              <>
+                                <BookOpen className="w-3.5 h-3.5" />
+                                <span>Detailed Analysis</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        
+                        {!showDetailedSummary ? (
+                          <div>
+                            <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {summary || 'No summary available.'}
+                            </p>
+                            {comprehensiveSummary ? (
+                              <div className="mt-3 flex items-center gap-2 text-xs text-primary/70">
+                                <BookOpen className="w-3.5 h-3.5" />
+                                <span>Click "Detailed Analysis" for comprehensive breakdown</span>
+                              </div>
+                            ) : comprehensiveSummaryLoading ? (
+                              <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground/60">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Generating detailed analysis...</span>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : comprehensiveSummary ? (
+                          <div className="space-y-4 text-sm">
+                            {/* Executive Summary */}
+                            {comprehensiveSummary.executive_summary && (
+                              <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+                                <p className="text-foreground leading-relaxed whitespace-pre-wrap">
+                                  {comprehensiveSummary.executive_summary}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Parties */}
+                            {comprehensiveSummary.parties && comprehensiveSummary.parties.length > 0 && (
+                              <div>
+                                <h5 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                                  <Users className="w-4 h-4" />
+                                  Parties Involved
+                                </h5>
+                                <div className="space-y-2">
+                                  {comprehensiveSummary.parties.map((party, idx) => (
+                                    <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-2">
+                                      <div className="font-medium text-foreground">{party.name}</div>
+                                      <div className="text-xs text-primary">{party.role}</div>
+                                      {party.simple_explanation && (
+                                        <div className="text-xs text-muted-foreground mt-1">{party.simple_explanation}</div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Purpose */}
+                            {comprehensiveSummary.purpose && (
+                              <div>
+                                <h5 className="font-semibold text-foreground mb-2">Purpose</h5>
+                                <p className="text-muted-foreground">{comprehensiveSummary.purpose}</p>
+                              </div>
+                            )}
+
+                            {/* Key Obligations */}
+                            {comprehensiveSummary.key_obligations && Object.keys(comprehensiveSummary.key_obligations).length > 0 && (
+                              <div>
+                                <h5 className="font-semibold text-foreground mb-2">Key Obligations</h5>
+                                <div className="space-y-2">
+                                  {Object.entries(comprehensiveSummary.key_obligations).map(([party, obligation], idx) => (
+                                    <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-2">
+                                      <div className="font-medium text-foreground text-xs">{party}</div>
+                                      <div className="text-xs text-muted-foreground mt-1">{obligation}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Financial Terms */}
+                            {comprehensiveSummary.financial_terms && comprehensiveSummary.financial_terms.length > 0 && (
+                              <div>
+                                <h5 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                                  <DollarSign className="w-4 h-4" />
+                                  Financial Terms
+                                </h5>
+                                <div className="space-y-2">
+                                  {comprehensiveSummary.financial_terms.map((term, idx) => (
+                                    <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-2">
+                                      <div className="flex justify-between items-start">
+                                        <div className="text-xs text-foreground">{term.item}</div>
+                                        <div className="text-xs font-semibold text-primary">{term.amount}</div>
+                                      </div>
+                                      {term.simple_explanation && (
+                                        <div className="text-xs text-muted-foreground mt-1">{term.simple_explanation}</div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Term & Termination */}
+                            {comprehensiveSummary.term_and_termination && (
+                              <div>
+                                <h5 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                                  <Calendar className="w-4 h-4" />
+                                  Term & Termination
+                                </h5>
+                                <div className="bg-card/50 border border-border/40 rounded-lg p-2 space-y-1 text-xs">
+                                  <div><span className="font-medium">Duration:</span> {comprehensiveSummary.term_and_termination.duration}</div>
+                                  {comprehensiveSummary.term_and_termination.renewal_terms && (
+                                    <div><span className="font-medium">Renewal:</span> {comprehensiveSummary.term_and_termination.renewal_terms}</div>
+                                  )}
+                                  {comprehensiveSummary.term_and_termination.termination_process && (
+                                    <div><span className="font-medium">How to Exit:</span> {comprehensiveSummary.term_and_termination.termination_process}</div>
+                                  )}
+                                  {comprehensiveSummary.term_and_termination.notice_period && (
+                                    <div><span className="font-medium">Notice:</span> {comprehensiveSummary.term_and_termination.notice_period}</div>
+                                  )}
+                                  {comprehensiveSummary.term_and_termination.simple_explanation && (
+                                    <div className="text-muted-foreground mt-2 pt-2 border-t border-border/40">
+                                      {comprehensiveSummary.term_and_termination.simple_explanation}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Important Deadlines */}
+                            {comprehensiveSummary.important_deadlines && comprehensiveSummary.important_deadlines.length > 0 && (
+                              <div>
+                                <h5 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                                  <Clock className="w-4 h-4" />
+                                  Important Deadlines
+                                </h5>
+                                <ul className="space-y-1 text-xs text-muted-foreground">
+                                  {comprehensiveSummary.important_deadlines.map((deadline, idx) => (
+                                    <li key={idx} className="flex items-start gap-2">
+                                      <span className="text-primary mt-0.5">•</span>
+                                      <span>{deadline}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Legal Terms Explained */}
+                            {comprehensiveSummary.legal_terms_explained && comprehensiveSummary.legal_terms_explained.length > 0 && (
+                              <div>
+                                <h5 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                                  <BookOpen className="w-4 h-4" />
+                                  Legal Terms in Plain English
+                                </h5>
+                                <div className="space-y-2">
+                                  {comprehensiveSummary.legal_terms_explained.map((item, idx) => (
+                                    <div key={idx} className="bg-secondary/10 border border-secondary/20 rounded-lg p-2">
+                                      <div className="font-medium text-foreground text-xs">{item.term}</div>
+                                      <div className="text-xs text-muted-foreground mt-1">{item.meaning}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Compliance Requirements */}
+                            {comprehensiveSummary.compliance_requirements && comprehensiveSummary.compliance_requirements.length > 0 && (
+                              <div>
+                                <h5 className="font-semibold text-foreground mb-2">Compliance Requirements</h5>
+                                <ul className="space-y-1 text-xs text-muted-foreground">
+                                  {comprehensiveSummary.compliance_requirements.map((req, idx) => (
+                                    <li key={idx} className="flex items-start gap-2">
+                                      <span className="text-primary mt-0.5">•</span>
+                                      <span>{req}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Attachments */}
+                            {comprehensiveSummary.attachments_mentioned && comprehensiveSummary.attachments_mentioned.length > 0 && (
+                              <div>
+                                <h5 className="font-semibold text-foreground mb-2">Attachments/Schedules</h5>
+                                <ul className="space-y-1 text-xs text-muted-foreground">
+                                  {comprehensiveSummary.attachments_mentioned.map((att, idx) => (
+                                    <li key={idx} className="flex items-start gap-2">
+                                      <span className="text-primary mt-0.5">•</span>
+                                      <span>{att}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-muted-foreground text-sm">No detailed summary available.</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground mb-2">High-Risk Clauses</h4>
+                        {highRiskClauses.length ? (
+                          <ul className="space-y-3">
+                            {highRiskClauses.map((clause, idx) => {
+                              const { score, level } = getRiskDisplay(clause);
+                              const text = clause?.clause_text || clause?.clauseText || '';
+                              const rationale = clause?.rationale || clause?.reason || '';
+                              const mitigation = getMitigation(clause);
+                              const replacement = getReplacementClause(clause);
+                              return (
+                                <li key={`risk-${idx}`} className="p-3 rounded-xl border border-border/40 bg-background/40">
+                                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-secondary mb-1">
+                                    <ShieldAlert className="w-4 h-4" />
+                                    <span>Risk: {level}{score ? ` • ${score}/5` : ''}</span>
+                                  </div>
+                                  {text && (
+                                    <p className="text-sm text-foreground leading-relaxed mb-1 whitespace-pre-wrap">{text}</p>
+                                  )}
+                                  {rationale && (
+                                    <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{rationale}</p>
+                                  )}
+                                  {mitigation && (
+                                    <div className="mt-2 flex items-start gap-2 text-xs bg-primary/10 border border-primary/30 rounded-lg p-2">
+                                      <Lightbulb className="w-4 h-4 mt-0.5 text-primary" />
+                                      <div className="text-muted-foreground whitespace-pre-wrap">
+                                        <span className="font-semibold text-primary">Suggested Change:</span> {mitigation}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {replacement && (
+                                    <div className="mt-2 flex items-start gap-2 text-xs bg-card/50 border border-border/40 rounded-lg p-2">
+                                      <FileText className="w-4 h-4 mt-0.5 text-secondary" />
+                                      <div className="text-muted-foreground whitespace-pre-wrap">
+                                        <span className="font-semibold text-foreground">Alternate Clause:</span> {replacement}
+                                      </div>
+                                    </div>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            No high-risk clauses were flagged in the preview.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Questions/Chat Interface */}
+              <div className="lg:col-span-1 flex flex-col h-[60vh]">
                 <div className="bg-card/40 backdrop-blur-xl rounded-2xl border border-border/50 overflow-hidden flex flex-col h-full">
                   <div className="p-6 border-b border-border/50 bg-gradient-to-r from-primary/5 to-secondary/5 flex-shrink-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
-                        <MessageCircle className="w-5 h-5 text-foreground" />
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
+                          <MessageCircle className="w-5 h-5 text-foreground" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-foreground">Ask Questions</h3>
                       </div>
-                      <h3 className="text-lg font-semibold text-foreground">Ask Questions</h3>
+                      <button
+                        onClick={() => setExpandedSection('chat')}
+                        className="p-2 hover:bg-primary/10 rounded-lg transition-colors group"
+                        title="Expand chat"
+                      >
+                        <Maximize2 className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                      </button>
                     </div>
                     <p className="text-sm text-muted-foreground">Chat with AI about your document</p>
                   </div>
@@ -480,51 +965,16 @@ const DocumentAnalyzer = () => {
                         onKeyDown={handleKeyDown}
                         placeholder="Ask anything about your document..."
                         disabled={!sessionId || loading}
-                        className="flex-1 px-4 py-3 bg-card/50 border border-border/50 rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                        className="flex-1 px-4 py-3 bg-card/50 border border-border/50 rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all min-w-0"
                       />
                       <button
                         onClick={handleSendMessage}
                         disabled={!sessionId || !chatMessage.trim() || loading}
-                        className="px-6 py-3 bg-gradient-to-r from-primary to-secondary text-foreground rounded-xl font-medium hover:shadow-lg hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
+                        className="px-4 py-3 bg-gradient-to-r from-primary to-secondary text-foreground rounded-xl font-medium hover:shadow-lg hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 flex-shrink-0"
                       >
-                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Send className="w-5 h-5" /><span>Send</span></>}
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Send className="w-5 h-5" /><span className="hidden sm:inline">Send</span></>}
                       </button>
                     </div>
-                  </div>
-                </div>
-              </div>
-
-               <div className="lg:col-span-2 flex flex-col min-h-0">
-                <div className="bg-card/40 backdrop-blur-xl rounded-2xl border border-border/50 overflow-hidden flex flex-col">
-                  <div className="p-6 border-b border-border/50 bg-gradient-to-r from-primary/5 to-secondary/5 flex-shrink-0">
-                    <div className="flex items-center justify-between mb-2"> {/* Added justify-between here */}
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
-                          <Bot className="w-5 h-5 text-foreground" />
-                        </div>
-                        <h3 className="text-lg font-semibold text-foreground">Analysis</h3>
-                      </div>
-                      <button
-                        onClick={handleCopySummary}
-                        className="px-3 py-1.5 bg-gradient-to-r from-primary to-secondary text-foreground rounded-lg font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 flex items-center gap-2 text-sm"
-                      >
-                        {isSummaryCopied ? (
-                          <>
-                            <Check className="w-4 h-4" />
-                            <span>Copied!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4" />
-                            <span>Copy Analysis</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <p className="text-sm text-muted-foreground">AI-generated insights</p>
-                  </div>
-                  <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
-                    <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap mb-4">{summary}</p>
                   </div>
                 </div>
               </div>
@@ -532,6 +982,360 @@ const DocumentAnalyzer = () => {
           )}
         </div>
       </div>
+
+      {/* Expanded Modals */}
+      {expandedSection === 'preview' && (
+        <ExpandedModal
+          section="preview"
+          title="Document Preview"
+          onClose={() => setExpandedSection(null)}
+        >
+          {highlightedPreview ? (
+            <div
+              className="text-base leading-relaxed text-muted-foreground space-y-4"
+              dangerouslySetInnerHTML={{ __html: highlightedPreview }}
+            />
+          ) : (
+            <p className="text-base text-muted-foreground whitespace-pre-wrap">
+              {previewText || 'Preview not available for this document.'}
+            </p>
+          )}
+        </ExpandedModal>
+      )}
+
+      {expandedSection === 'analysis' && (
+        <ExpandedModal
+          section="analysis"
+          title="Document Analysis"
+          onClose={() => setExpandedSection(null)}
+        >
+          <div className="space-y-6">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg font-semibold text-foreground">Summary</h4>
+                <button
+                  onClick={() => setShowDetailedSummary(!showDetailedSummary)}
+                  disabled={!comprehensiveSummary}
+                  className="flex items-center gap-2 text-sm px-4 py-2 bg-gradient-to-r from-primary/20 to-secondary/20 text-primary rounded-lg hover:from-primary/30 hover:to-secondary/30 transition-all duration-200 font-medium border border-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {showDetailedSummary ? (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Quick View</span>
+                    </>
+                  ) : (
+                    <>
+                      <BookOpen className="w-4 h-4" />
+                      <span>Detailed Analysis</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              {!showDetailedSummary ? (
+                <div>
+                  <p className="text-base text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                    {summary || 'No summary available.'}
+                  </p>
+                  {comprehensiveSummary && (
+                    <div className="mt-4 flex items-center gap-2 text-sm text-primary/70">
+                      <BookOpen className="w-4 h-4" />
+                      <span>Click "Detailed Analysis" for comprehensive breakdown</span>
+                    </div>
+                  )}
+                </div>
+              ) : comprehensiveSummary ? (
+                <div className="space-y-5 text-base">
+                  {/* Executive Summary */}
+                  {comprehensiveSummary.executive_summary && (
+                    <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+                      <p className="text-foreground leading-relaxed whitespace-pre-wrap">
+                        {comprehensiveSummary.executive_summary}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Parties */}
+                  {comprehensiveSummary.parties && comprehensiveSummary.parties.length > 0 && (
+                    <div>
+                      <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
+                        <Users className="w-5 h-5" />
+                        Parties Involved
+                      </h5>
+                      <div className="space-y-3">
+                        {comprehensiveSummary.parties.map((party, idx) => (
+                          <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-3">
+                            <div className="font-medium text-foreground text-base">{party.name}</div>
+                            <div className="text-sm text-primary">{party.role}</div>
+                            {party.simple_explanation && (
+                              <div className="text-sm text-muted-foreground mt-2">{party.simple_explanation}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Purpose */}
+                  {comprehensiveSummary.purpose && (
+                    <div>
+                      <h5 className="font-semibold text-foreground mb-2 text-base">Purpose</h5>
+                      <p className="text-muted-foreground">{comprehensiveSummary.purpose}</p>
+                    </div>
+                  )}
+
+                  {/* Key Obligations */}
+                  {comprehensiveSummary.key_obligations && Object.keys(comprehensiveSummary.key_obligations).length > 0 && (
+                    <div>
+                      <h5 className="font-semibold text-foreground mb-3 text-base">Key Obligations</h5>
+                      <div className="space-y-3">
+                        {Object.entries(comprehensiveSummary.key_obligations).map(([party, obligation], idx) => (
+                          <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-3">
+                            <div className="font-medium text-foreground text-sm">{party}</div>
+                            <div className="text-sm text-muted-foreground mt-2">{obligation}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Financial Terms */}
+                  {comprehensiveSummary.financial_terms && comprehensiveSummary.financial_terms.length > 0 && (
+                    <div>
+                      <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
+                        <DollarSign className="w-5 h-5" />
+                        Financial Terms
+                      </h5>
+                      <div className="space-y-3">
+                        {comprehensiveSummary.financial_terms.map((term, idx) => (
+                          <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-3">
+                            <div className="flex justify-between items-start">
+                              <div className="text-sm text-foreground">{term.item}</div>
+                              <div className="text-sm font-semibold text-primary">{term.amount}</div>
+                            </div>
+                            {term.simple_explanation && (
+                              <div className="text-sm text-muted-foreground mt-2">{term.simple_explanation}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Term & Termination */}
+                  {comprehensiveSummary.term_and_termination && (
+                    <div>
+                      <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
+                        <Calendar className="w-5 h-5" />
+                        Term & Termination
+                      </h5>
+                      <div className="bg-card/50 border border-border/40 rounded-lg p-3 space-y-2 text-sm">
+                        <div><span className="font-medium">Duration:</span> {comprehensiveSummary.term_and_termination.duration}</div>
+                        {comprehensiveSummary.term_and_termination.renewal_terms && (
+                          <div><span className="font-medium">Renewal:</span> {comprehensiveSummary.term_and_termination.renewal_terms}</div>
+                        )}
+                        {comprehensiveSummary.term_and_termination.termination_process && (
+                          <div><span className="font-medium">How to Exit:</span> {comprehensiveSummary.term_and_termination.termination_process}</div>
+                        )}
+                        {comprehensiveSummary.term_and_termination.notice_period && (
+                          <div><span className="font-medium">Notice:</span> {comprehensiveSummary.term_and_termination.notice_period}</div>
+                        )}
+                        {comprehensiveSummary.term_and_termination.simple_explanation && (
+                          <div className="text-muted-foreground mt-3 pt-3 border-t border-border/40">
+                            {comprehensiveSummary.term_and_termination.simple_explanation}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Important Deadlines */}
+                  {comprehensiveSummary.important_deadlines && comprehensiveSummary.important_deadlines.length > 0 && (
+                    <div>
+                      <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
+                        <Clock className="w-5 h-5" />
+                        Important Deadlines
+                      </h5>
+                      <ul className="space-y-2 text-sm text-muted-foreground">
+                        {comprehensiveSummary.important_deadlines.map((deadline, idx) => (
+                          <li key={idx} className="flex items-start gap-2">
+                            <span className="text-primary mt-0.5">•</span>
+                            <span>{deadline}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Legal Terms Explained */}
+                  {comprehensiveSummary.legal_terms_explained && comprehensiveSummary.legal_terms_explained.length > 0 && (
+                    <div>
+                      <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
+                        <BookOpen className="w-5 h-5" />
+                        Legal Terms in Plain English
+                      </h5>
+                      <div className="space-y-3">
+                        {comprehensiveSummary.legal_terms_explained.map((item, idx) => (
+                          <div key={idx} className="bg-secondary/10 border border-secondary/20 rounded-lg p-3">
+                            <div className="font-medium text-foreground text-sm">{item.term}</div>
+                            <div className="text-sm text-muted-foreground mt-2">{item.meaning}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Compliance Requirements */}
+                  {comprehensiveSummary.compliance_requirements && comprehensiveSummary.compliance_requirements.length > 0 && (
+                    <div>
+                      <h5 className="font-semibold text-foreground mb-3 text-base">Compliance Requirements</h5>
+                      <ul className="space-y-2 text-sm text-muted-foreground">
+                        {comprehensiveSummary.compliance_requirements.map((req, idx) => (
+                          <li key={idx} className="flex items-start gap-2">
+                            <span className="text-primary mt-0.5">•</span>
+                            <span>{req}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Attachments */}
+                  {comprehensiveSummary.attachments_mentioned && comprehensiveSummary.attachments_mentioned.length > 0 && (
+                    <div>
+                      <h5 className="font-semibold text-foreground mb-3 text-base">Attachments/Schedules</h5>
+                      <ul className="space-y-2 text-sm text-muted-foreground">
+                        {comprehensiveSummary.attachments_mentioned.map((att, idx) => (
+                          <li key={idx} className="flex items-start gap-2">
+                            <span className="text-primary mt-0.5">•</span>
+                            <span>{att}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-base">No detailed summary available.</p>
+              )}
+            </div>
+
+            <div>
+              <h4 className="text-lg font-semibold text-foreground mb-3">High-Risk Clauses</h4>
+              {highRiskClauses.length ? (
+                <ul className="space-y-4">
+                  {highRiskClauses.map((clause, idx) => {
+                    const { score, level } = getRiskDisplay(clause);
+                    const text = clause?.clause_text || clause?.clauseText || '';
+                    const rationale = clause?.rationale || clause?.reason || '';
+                    const mitigation = getMitigation(clause);
+                    const replacement = getReplacementClause(clause);
+                    return (
+                      <li key={`risk-${idx}`} className="p-4 rounded-xl border border-border/40 bg-background/40">
+                        <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-secondary mb-2">
+                          <ShieldAlert className="w-5 h-5" />
+                          <span>Risk: {level}{score ? ` • ${score}/5` : ''}</span>
+                        </div>
+                        {text && (
+                          <p className="text-base text-foreground leading-relaxed mb-2 whitespace-pre-wrap">{text}</p>
+                        )}
+                        {rationale && (
+                          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{rationale}</p>
+                        )}
+                        {mitigation && (
+                          <div className="mt-3 flex items-start gap-2 text-sm bg-primary/10 border border-primary/30 rounded-lg p-3">
+                            <Lightbulb className="w-5 h-5 mt-0.5 text-primary" />
+                            <div className="text-muted-foreground whitespace-pre-wrap">
+                              <span className="font-semibold text-primary">Suggested Change:</span> {mitigation}
+                            </div>
+                          </div>
+                        )}
+                        {replacement && (
+                          <div className="mt-3 flex items-start gap-2 text-sm bg-card/50 border border-border/40 rounded-lg p-3">
+                            <FileText className="w-5 h-5 mt-0.5 text-secondary" />
+                            <div className="text-muted-foreground whitespace-pre-wrap">
+                              <span className="font-semibold text-foreground">Alternate Clause:</span> {replacement}
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-base text-muted-foreground leading-relaxed">
+                  No high-risk clauses were flagged in the preview.
+                </p>
+              )}
+            </div>
+          </div>
+        </ExpandedModal>
+      )}
+
+      {expandedSection === 'chat' && (
+        <ExpandedModal
+          section="chat"
+          title="Ask Questions"
+          onClose={() => setExpandedSection(null)}
+        >
+          <div className="flex flex-col h-[70vh]">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar mb-6">
+              {chatHistory.map((message) => (
+                <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'User' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                  {message.sender !== 'User' && (
+                    <div className="w-10 h-10 rounded-full bg-card flex items-center justify-center flex-shrink-0">
+                      <Bot className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className={`max-w-[75%]`}>
+                    <div className={`rounded-2xl px-5 py-4 ${
+                      message.sender === 'User' ? 'bg-gradient-to-br from-primary to-secondary text-foreground shadow-lg shadow-primary/20' : 'bg-card/50 text-foreground border border-border/50'
+                    }`}>
+                      <p className="text-base leading-relaxed whitespace-pre-wrap">{message.message}</p>
+                    </div>
+                  </div>
+                  {message.sender === 'User' && (
+                    <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                      <User className="w-6 h-6 text-foreground" />
+                    </div>
+                  )}
+                </div>
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="bg-card/50 border border-border/50 px-5 py-4 rounded-2xl flex items-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    <span className="text-base text-muted-foreground">Thinking...</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Input */}
+            <div className="border-t border-border/50 pt-4">
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask anything about your document..."
+                  disabled={!sessionId || loading}
+                  className="flex-1 px-5 py-4 bg-card/50 border border-border/50 rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-base"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!sessionId || !chatMessage.trim() || loading}
+                  className="px-8 py-4 bg-gradient-to-r from-primary to-secondary text-foreground rounded-xl font-medium hover:shadow-lg hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
+                >
+                  {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Send className="w-6 h-6" /><span>Send</span></>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ExpandedModal>
+      )}
     </div>
   );
 };
