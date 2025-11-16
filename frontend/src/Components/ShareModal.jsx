@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Copy, X, UserPlus, Trash2, Check } from 'lucide-react';
 import { Button } from '@/Components/ui/button';
-import { Input } from '@/Components/ui/input';
+import { Input } from '@/Components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/Card';
-import { Label } from '@/Components/ui/label';
+import { Label } from '@/Components/ui/Label';
 import { Switch } from '@/Components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/Components/ui/select'; // Import Select components
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/Components/ui/Select'; // Import Select components
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
 

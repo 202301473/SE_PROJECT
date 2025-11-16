@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { User, Mail, Phone, GraduationCap, Building, Clock, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/Components/ui/Card";
-import { Label } from "@/Components/ui/label";
+import { Label } from "@/Components/ui/Label";
 import axios from "../api/axios";
 import toast from "react-hot-toast";
 import { Button } from "@/Components/ui/button";

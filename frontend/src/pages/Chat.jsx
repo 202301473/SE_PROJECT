@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/Card";
 import { Button } from "@/Components/ui/button";
-import { Input } from "@/Components/ui/input";
+import { Input } from "@/Components/ui/Input";
 import { Send, Paperclip, FileText, ArrowLeft } from 'lucide-react';
 
 const Chat = () => {

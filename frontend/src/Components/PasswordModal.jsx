@@ -8,8 +8,8 @@ import {
   DialogFooter,
 } from '@/Components/ui/dialog';
 import { Button } from '@/Components/ui/button';
-import { Input } from '@/Components/ui/input';
-import { Label } from '@/Components/ui/label';
+import { Input } from '@/Components/ui/Input';
+import { Label } from '@/Components/ui/Label';
 import toast from 'react-hot-toast';
 
 const PasswordModal = ({ isOpen, onOpenChange, user, onPasswordSubmit }) => {

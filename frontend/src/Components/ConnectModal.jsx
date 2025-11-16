@@ -6,11 +6,11 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+} from '@/Components/ui/dialog';
+import { Button } from '@/Components/ui/button';
+import { Input } from '@/Components/ui/Input';
+import { Label } from '@/Components/ui/Label';
+import { Textarea } from '@/Components/ui/textarea';
 
 const ConnectModal = ({ isOpen, onOpenChange, lawyer, onConnect }) => {
   const [message, setMessage] = useState('');
