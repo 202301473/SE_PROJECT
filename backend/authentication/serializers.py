@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import User, LawyerProfile, LawyerConnectionRequest
+from .models import User
+from lawyer.models import LawyerProfile
 from django.contrib.auth.password_validation import validate_password
 
 
@@ -14,23 +15,28 @@ class UserSerializer(serializers.Serializer):
     cover_photo = serializers.URLField(read_only=True)  # Added cover_photo
     auth_provider = serializers.CharField(read_only=True)
     date_joined = serializers.DateTimeField(read_only=True)
-
+    has_password = serializers.SerializerMethodField()
+    
+    def get_has_password(self, instance):
+        return instance.password != '!'
+    
     def to_representation(self, instance):
         """Convert MongoEngine document to dict"""
         return {
-            "id": str(instance.id),
-            "email": instance.email,
-            "username": instance.username,
-            "name": instance.name,
-            "profile_picture": instance.profile_picture,
-            "cover_photo": instance.cover_photo,  # Added cover_photo
-            "auth_provider": instance.auth_provider,
-            "date_joined": instance.date_joined,
-            "phone": instance.phone,
-            "role": instance.role,
-            "is_verified": instance.is_verified,
-            "is_lawyer_verified": instance.is_lawyer_verified,
-            "lawyer_verification_status": instance.lawyer_verification_status,
+            'id': str(instance.id),
+            'email': instance.email,
+            'username': instance.username,
+            'name': instance.name,
+            'profile_picture': instance.profile_picture,
+            'cover_photo': instance.cover_photo, # Added cover_photo
+            'auth_provider': instance.auth_provider,
+            'date_joined': instance.date_joined,
+            'phone': instance.phone,
+            'role': instance.role,
+            'is_verified': instance.is_verified,
+            'is_lawyer_verified': instance.is_lawyer_verified,
+            'lawyer_verification_status': instance.lawyer_verification_status,
+            'has_password': self.get_has_password(instance)
         }
 
 
@@ -337,12 +343,9 @@ class UserProfileSerializer(serializers.Serializer):
     """Serializer for updating user profile"""
 
     name = serializers.CharField(required=False, allow_blank=True, max_length=255)
-    profile_picture = serializers.URLField(
-        required=False, allow_blank=True, max_length=255
-    )
-    cover_photo = serializers.URLField(
-        required=False, allow_blank=True, max_length=255
-    )  # Added cover_photo
+    profile_picture = serializers.URLField(required=False, allow_blank=True, max_length=255)
+    cover_photo = serializers.URLField(required=False, allow_blank=True, max_length=255) # Added cover_photo
+    role = serializers.CharField(read_only=True)
 
     def update(self, instance, validated_data):
         instance.name = validated_data.get("name", instance.name)
@@ -455,4 +458,25 @@ class ResetPasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"confirm_password": "Password fields didn't match."}
             )
+        return attrs
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """Serializer for password change"""
+    current_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, validators=[validate_password])
+    new_password2 = serializers.CharField(required=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password2']:
+            raise serializers.ValidationError({"new_password": "New passwords didn't match."})
+        return attrs
+
+class AddPasswordSerializer(serializers.Serializer):
+    """Serializer for adding a password to a Google-authenticated user"""
+    new_password = serializers.CharField(required=True, validators=[validate_password])
+    new_password2 = serializers.CharField(required=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password2']:
+            raise serializers.ValidationError({"new_password": "New passwords didn't match."})
         return attrs

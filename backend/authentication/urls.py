@@ -14,6 +14,8 @@ from .views import (
     lawyer_dashboard_view,
     lawyer_connection_update_view,
     forgot_password_view,
+    change_password_view,
+    add_password_view,
     reset_password_view
 )
 
@@ -33,4 +35,6 @@ urlpatterns = [
     path('lawyers/<str:lawyer_id>/connect/', connect_with_lawyer_view, name='connect_lawyer'),
     path('lawyer/dashboard/', lawyer_dashboard_view, name='lawyer_dashboard'),
     path('lawyer/connections/<str:connection_id>/', lawyer_connection_update_view, name='lawyer_connection_update'),
+    path('change-password/', change_password_view, name='change_password'),
+    path('add-password/', add_password_view, name='add_password'),
 ]

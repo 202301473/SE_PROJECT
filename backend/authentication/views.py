@@ -26,6 +26,8 @@ from .serializers import (
     ForgotPasswordSerializer,
     ResetPasswordSerializer,
     LawyerConnectionRequestSerializer,
+    ChangePasswordSerializer,
+    AddPasswordSerializer,
     LawyerConnectionStatusSerializer,
 )
 from datetime import datetime
@@ -856,6 +858,7 @@ def lawyer_connection_update_view(request, connection_id):
 
 
 @api_view(["POST"])
+@api_view(['POST'])
 @permission_classes([AllowAny])
 def forgot_password_view(request):
     """Send OTP for password reset"""
@@ -949,3 +952,36 @@ def reset_password_view(request):
         },
         status=status.HTTP_200_OK,
     )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password_view(request):
+    """Change user password"""
+    user = request.user
+    serializer = ChangePasswordSerializer(data=request.data)
+    if serializer.is_valid():
+        if not user.check_password(serializer.data.get("current_password")):
+            return Response({"error": "Incorrect current password."}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(serializer.data.get("new_password"))
+        user.save()
+        return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
+    print("ChangePasswordSerializer errors:", serializer.errors) # Debugging line
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_password_view(request):
+    """Add a password to a Google-authenticated user"""
+    user = request.user
+    if user.auth_provider != 'google':
+        return Response({"error": "This feature is only for users who signed up with Google."}, status=status.HTTP_400_BAD_REQUEST)
+    if user.password and user.password != '!':
+        return Response({"error": "You already have a password."}, status=status.HTTP_400_BAD_REQUEST)
+    
+    serializer = AddPasswordSerializer(data=request.data)
+    if serializer.is_valid():
+        user.set_password(serializer.data.get("new_password"))
+        user.save()
+        return Response({"message": "Password added successfully."}, status=status.HTTP_200_OK)
+    print("AddPasswordSerializer errors:", serializer.errors) # Debugging line
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

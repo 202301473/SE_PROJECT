@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { User, Mail, Camera, Edit2, Check, X, Sparkles } from "lucide-react";
+import { User, Mail, Camera, Edit2, Check, X, Sparkles, Lock } from "lucide-react";
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import axios from '../api/axios';
+import PasswordModal from '../Components/PasswordModal'; // Import the new modal
 
 const Profile = () => {
   const { user, loading, setUser } = useAuth();
@@ -11,14 +12,16 @@ const Profile = () => {
     username: '',
     email: '',
     profile_picture: '',
-    cover_photo: '', // Added cover_photo
+    cover_photo: '',
     new_profile_picture: null,
-    new_cover_photo: null, // Added new_cover_photo
+    new_cover_photo: null,
   });
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
-  const [previewCoverImage, setPreviewCoverImage] = useState(null); // Added previewCoverImage
+  const [previewCoverImage, setPreviewCoverImage] = useState(null);
+
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false); // State for modal visibility
 
   useEffect(() => {
     if (user) {
@@ -27,7 +30,7 @@ const Profile = () => {
         username: user.username || '',
         email: user.email || '',
         profile_picture: user.profile_picture || '',
-        cover_photo: user.cover_photo || '', // Initialize cover_photo
+        cover_photo: user.cover_photo || '',
         new_profile_picture: null,
         new_cover_photo: null,
       });
@@ -51,7 +54,6 @@ const Profile = () => {
   };
 
   const handleCoverFileChange = (e) => {
-    console.log('handleCoverFileChange called'); // Debugging line
     const file = e.target.files[0];
     if (file) {
       setProfileData({ ...profileData, new_cover_photo: file });
@@ -71,7 +73,7 @@ const Profile = () => {
       if (profileData.new_profile_picture) {
         formData.append('profile_picture', profileData.new_profile_picture);
       }
-      if (profileData.new_cover_photo) { // Added new_cover_photo
+      if (profileData.new_cover_photo) {
         formData.append('cover_photo', profileData.new_cover_photo);
       }
 
@@ -83,7 +85,7 @@ const Profile = () => {
       setUser(response.data);
       setIsEditing(false);
       setPreviewImage(null);
-      setPreviewCoverImage(null); // Reset previewCoverImage
+      setPreviewCoverImage(null);
     } catch (error) {
       console.error('Failed to update profile:', error);
       toast.error(error.response?.data?.error || 'Failed to update profile.');
@@ -95,17 +97,53 @@ const Profile = () => {
   const handleCancel = () => {
     setIsEditing(false);
     setPreviewImage(null);
-    setPreviewCoverImage(null); // Reset previewCoverImage
+    setPreviewCoverImage(null);
     if (user) {
       setProfileData({
         name: user.name || '',
         username: user.username || '',
         email: user.email || '',
         profile_picture: user.profile_picture || '',
-        cover_photo: user.cover_photo || '', // Reset cover_photo
+        cover_photo: user.cover_photo || '',
         new_profile_picture: null,
         new_cover_photo: null,
       });
+    }
+  };
+
+  // This function will now be passed to the modal
+  const handlePasswordSubmit = async (payload, endpoint) => {
+    try {
+      const response = await axios.post(endpoint, payload);
+      toast.success(response.data.message);
+      setUser({ ...user, has_password: true }); // Update has_password status
+      // No need to reset passwordForm state here, modal handles its own state
+    } catch (error) {
+      console.error('Failed to change/add password:', error);
+      console.log('Full error response:', error.response);
+
+      let errorMessage = 'Failed to update password.';
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (typeof error.response.data === 'object') {
+          const messages = [];
+          for (const key in error.response.data) {
+            if (Array.isArray(error.response.data[key])) {
+              messages.push(...error.response.data[key]);
+            } else if (typeof error.response.data[key] === 'string') {
+              messages.push(error.response.data[key]);
+            }
+          }
+          if (messages.length > 0) {
+            errorMessage = messages.join(' ');
+          } else if (error.response.data.error) {
+            errorMessage = error.response.data.error;
+          }
+        }
+      }
+      toast.error(errorMessage);
+      throw error; // Re-throw to prevent modal from closing on error
     }
   };
 
@@ -164,7 +202,7 @@ const Profile = () => {
         {/* Profile Card */}
         <div className="bg-card/40 backdrop-blur-xl rounded-3xl border border-border/50 overflow-hidden shadow-2xl">
           {/* Cover Image */}
-          <div className="h-48 relative group"> {/* Increased height for cover photo */}
+          <div className="h-48 relative group">
             {profileData.cover_photo || previewCoverImage ? (
               <img 
                 src={previewCoverImage || profileData.cover_photo} 
@@ -177,11 +215,11 @@ const Profile = () => {
               </div>
             )}
             
-            <div className="absolute inset-0 bg-black/20"></div> {/* Overlay for gradient effect */}
+            <div className="absolute inset-0 bg-black/20"></div>
             {isEditing && (
               <label 
                 htmlFor="cover-photo-upload" 
-                className="absolute bottom-4 right-4 p-2.5 bg-input/70 rounded-xl cursor-pointer hover:bg-input transition-all duration-200 flex items-center gap-2 text-foreground text-sm font-medium z-10" // Added z-10
+                className="absolute bottom-4 right-4 p-2.5 bg-input/70 rounded-xl cursor-pointer hover:bg-input transition-all duration-200 flex items-center gap-2 text-foreground text-sm font-medium z-10"
               >
                 <Camera className="w-4 h-4" />
                 Change Cover
@@ -222,7 +260,8 @@ const Profile = () => {
                     htmlFor="profile-picture-upload" 
                     className="absolute bottom-2 right-2 p-2.5 bg-gradient-to-br from-primary to-secondary rounded-xl cursor-pointer hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 group"
                   >
-                    <Camera className="w-4 h-4 text-foreground group-hover:scale-110 transition-transform" />
+                    <Camera className="w-4 h-4" />
+                    Change Profile
                     <input 
                       id="profile-picture-upload" 
                       type="file" 
@@ -330,9 +369,44 @@ const Profile = () => {
                 </button>
               </div>
             )}
+
+            {/* Password Management Section */}
+            <div className="mt-8 pt-6 border-t border-border/50">
+              <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center gap-2">
+                <Lock className="w-6 h-6 text-primary" />
+                Password Management
+              </h2>
+
+              <div className="flex gap-3">
+                {user.auth_provider === 'google' && !user.has_password && (
+                  <button
+                    onClick={() => setIsPasswordModalOpen(true)}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 rounded-xl text-foreground font-medium transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:shadow-primary/40"
+                  >
+                    Add Password
+                  </button>
+                )}
+                {(user.auth_provider === 'email' || (user.auth_provider === 'google' && user.has_password)) && (
+                  <button
+                    onClick={() => setIsPasswordModalOpen(true)}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 rounded-xl text-foreground font-medium transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:shadow-primary/40"
+                  >
+                    Change Password
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
+      {user && (
+        <PasswordModal
+          isOpen={isPasswordModalOpen}
+          onOpenChange={setIsPasswordModalOpen}
+          user={user}
+          onPasswordSubmit={handlePasswordSubmit}
+        />
+      )}
     </div>
   );
 };

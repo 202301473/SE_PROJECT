@@ -46,7 +46,7 @@ const LawyerDashboard = () => {
 
     const loadDashboard = async () => {
       try {
-        const response = await axios.get("api/auth/lawyer/dashboard/");
+        const response = await axios.get("api/lawyer/dashboard/");
         setDashboard(response.data);
       } catch (err) {
         console.error("Failed to load lawyer dashboard:", err);
@@ -61,11 +61,11 @@ const LawyerDashboard = () => {
 
   const handleConnectionUpdate = async (requestId, status) => {
     try {
-      const response = await axios.patch(`api/auth/lawyer/connections/${requestId}/`, { status });
+      const response = await axios.patch(`api/lawyer/connections/${requestId}/`, { status });
       toast.success(response.data?.message || "Connection updated.");
       
       // Reload dashboard to get updated data including new chat conversations
-      const dashboardResponse = await axios.get("api/auth/lawyer/dashboard/");
+      const dashboardResponse = await axios.get("api/lawyer/dashboard/");
       setDashboard(dashboardResponse.data);
       
       // If accepted, show option to open chat
@@ -245,7 +245,7 @@ const LawyerDashboard = () => {
                       
                       // Try to get conversation by connection_request_id
                       const convResponse = await axios.get(
-                        `api/auth/chat/conversations/?connection_request_id=${connection.id}`
+                        `api/chat/conversations/?connection_request_id=${connection.id}`
                       );
                       
                       console.log('Conversation response:', convResponse.data);
@@ -257,7 +257,7 @@ const LawyerDashboard = () => {
                       
                       // Fallback: search all conversations
                       console.log('Fallback: searching all conversations');
-                      const allConvsResponse = await axios.get('api/auth/chat/conversations/');
+                      const allConvsResponse = await axios.get('api/chat/conversations/');
                       console.log('All conversations:', allConvsResponse.data);
                       
                       const conv = allConvsResponse.data.find(c => {

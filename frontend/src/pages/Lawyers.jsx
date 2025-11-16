@@ -12,7 +12,7 @@ const Lawyers = () => {
   useEffect(() => {
     const loadLawyers = async () => {
       try {
-        const response = await axios.get('api/auth/lawyers/');
+        const response = await axios.get('api/lawyer/');
         setLawyers(response.data || []);
       } catch (err) {
         console.error('Failed to fetch lawyers:', err);
