@@ -187,8 +187,8 @@ def login_view(request):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # Check if user registered with Google
-        if user.auth_provider == "google":
+        # Check if user registered with Google and has no usable password
+        if user.auth_provider == "google" and not user.has_usable_password():
             return Response(
                 {
                     "error": "This account is registered with Google. Please use Google Sign In."
@@ -857,7 +857,6 @@ def lawyer_connection_update_view(request, connection_id):
     )
 
 
-@api_view(["POST"])
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def forgot_password_view(request):

@@ -66,6 +66,10 @@ class User(Document):
     def check_password(self, raw_password):
         """Check if the provided password is correct"""
         return check_password(raw_password, self.password)
+
+    def has_usable_password(self):
+        """Check if the user has a usable password"""
+        return self.password is not None and self.password != '!'
     
     def get_full_name(self):
         return self.name or self.username

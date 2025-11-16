@@ -2,10 +2,13 @@ from django.test import TestCase, Client
 from rest_framework import status
 from unittest.mock import patch, MagicMock
 from bson.objectid import ObjectId
+from authentication.models import User
 
 class ShareLinkAPITestCase(TestCase):
     def setUp(self):
         self.client = Client()
+        self.user = User.create_user(email='test@example.com', username='testuser', password='password')
+        self.client.force_login(self.user)
 
     @patch('documents.views.update_share_permissions')
     def test_generate_share_link_existing_document_success(self, mock_update_share_permissions):
@@ -13,7 +16,7 @@ class ShareLinkAPITestCase(TestCase):
         mock_update_share_permissions.return_value = True
         
         document_id = '60d5ec49e8b4f6f3e6d3c5a8'
-        response = self.client.post('/documents/generate-share-link/', {
+        response = self.client.post('/api/documents/generate-share-link/', {
             'document_id': document_id,
             'permission_level': 'view'
         }, content_type='application/json')
@@ -29,7 +32,7 @@ class ShareLinkAPITestCase(TestCase):
         mock_update_share_permissions.return_value = False
         
         document_id = '60d5ec49e8b4f6f3e6d3c5a8'
-        response = self.client.post('/documents/generate-share-link/', {
+        response = self.client.post('/api/documents/generate-share-link/', {
             'document_id': document_id,
             'permission_level': 'edit'
         }, content_type='application/json')
@@ -44,7 +47,7 @@ class ShareLinkAPITestCase(TestCase):
         new_doc_id = ObjectId()
         mock_save_conversation.return_value = str(new_doc_id)
         
-        response = self.client.post('/documents/generate-share-link/', {
+        response = self.client.post('/api/documents/generate-share-link/', {
             'document_content': 'This is a new document.',
             'title': 'New Shared Doc',
             'permission_level': 'view'
@@ -56,7 +59,7 @@ class ShareLinkAPITestCase(TestCase):
         mock_save_conversation.assert_called_once()
 
     def test_generate_share_link_new_document_no_content(self):
-        response = self.client.post('/documents/generate-share-link/', {
+        response = self.client.post('/api/documents/generate-share-link/', {
             'title': 'Incomplete Doc'
         }, content_type='application/json')
         
