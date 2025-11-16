@@ -3,7 +3,7 @@ import axios from '../api/axios';
 import { FileText, Download, Trash2, History, X, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { saveAs } from 'file-saver';
-import { Button } from "@/Components/ui/Button";
+import { Button } from "@/Components/ui/button";
 
 const VersionsSidebar = ({ conversationId, onSelectVersion, onClose, currentVersion, onDeleteVersion }) => { // Added onDeleteVersion prop
   const [versions, setVersions] = useState([]);

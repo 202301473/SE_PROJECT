@@ -1,7 +1,7 @@
 "use client"
 
 import { ArrowRight, Shield, FileText, Zap, CheckCircle2, Sparkles, ArrowUpRight, X } from "lucide-react"
-import { Button } from "@/components/ui/Button"
+import { Button } from "@/Components/ui/button"
 import { Link } from "react-router-dom"
 import React, { useState, Suspense } from "react"
 import Navbar from "@/Components/Navbar/Navbar" // Import the new Navbar component
@@ -134,7 +134,7 @@ export default function Home() {
                         className="gap-2 bg-gradient-to-r from-primary to-secondary hover:shadow-lg hover:shadow-primary/50 text-white font-bold text-base px-8"
                         asChild
                       >
-                        <Link to="/auth/signup">
+                        <Link to="/signup">
                           Sign Up <ArrowRight className="w-5 h-5" />
                         </Link>
                       </Button>
@@ -144,7 +144,7 @@ export default function Home() {
                         className="border-2 border-muted-foreground/30 font-bold text-base px-8 bg-transparent"
                         asChild
                       >
-                        <Link to="/auth/signin">Sign In</Link>
+                        <Link to="/login">Sign In</Link>
                       </Button>
                     </>
                   )}

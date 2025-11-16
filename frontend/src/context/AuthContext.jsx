@@ -38,28 +38,32 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, []);
 
-  const login = async (email, password, socialUserData = null, socialTokens = null) => {
+  const login = async (email, password) => {
     setLoading(true);
     try {
-      let tokens;
-      let userData;
-      let redirect;
+      // Validate inputs
+      if (!email || !password) {
+        toast.error('Please provide both email and password.');
+        return false;
+      }
 
-      if (socialUserData && socialTokens) {
-        // For social logins (e.g., Google)
-        tokens = socialTokens;
-        userData = socialUserData;
-        redirect = 'home'; // Assuming social login always redirects to home
-      } else {
-        // For traditional email/password login
-        const response = await axios.post('/api/auth/login/', { email, password });
-        tokens = response.data.tokens;
-        userData = response.data.user;
-        redirect = response.data.redirect;
+      const response = await axios.post('/api/auth/login/', { email, password });
+
+      const { tokens, user: userData, redirect } = response.data;
+
+      // Check if OTP verification is required
+      if (response.data.requires_verification) {
+        toast.success(response.data.message);
+        navigate('/verify-otp', { state: { email: response.data.email } });
+        return false;
+      }
+
+      if (!tokens || !tokens.access || !tokens.refresh) {
+        toast.error('Invalid response from server. Please try again.');
+        return false;
       }
       
       const { access, refresh } = tokens;
-
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
       setUser(userData);
@@ -76,7 +80,38 @@ export const AuthProvider = ({ children }) => {
       return true;
     } catch (error) {
       console.error('Login failed:', error);
-      toast.error(error.response?.data?.error || 'Login failed.');
+      
+      if (error.response) {
+        // Server responded with error
+        const data = error.response.data;
+        let errorMessage = 'Login failed. Please try again.';
+        
+        if (typeof data === 'string') {
+          errorMessage = data;
+        } else if (data?.error) {
+          errorMessage = data.error;
+        } else if (data?.detail) {
+          errorMessage = data.detail;
+        } else if (data && typeof data === 'object') {
+          // Handle field-specific errors
+          const firstKey = Object.keys(data)[0];
+          const firstVal = data[firstKey];
+          if (Array.isArray(firstVal)) {
+            errorMessage = firstVal[0];
+          } else if (typeof firstVal === 'string') {
+            errorMessage = firstVal;
+          }
+        }
+        
+        toast.error(errorMessage);
+      } else if (error.request) {
+        // Request was made but no response
+        toast.error('Unable to connect to server. Please check your internet connection.');
+      } else {
+        // Something else happened
+        toast.error('An unexpected error occurred. Please try again.');
+      }
+      
       return false;
     } finally {
       setLoading(false);

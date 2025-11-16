@@ -3,7 +3,7 @@ import { useParams, useLocation } from 'react-router-dom'; // Import useLocation
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
-import { Button } from "@/Components/ui/Button";
+import { Button } from "@/Components/ui/button";
 import { FileText, Download, MessageCircle, X, User, Edit, History } from 'lucide-react'; // Import History icon
 import CommentList from '../Components/Comments/CommentList';
 import { saveAs } from 'file-saver';

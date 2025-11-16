@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
 import { FileText, History, Download, Trash2, PlusCircle, Share2 } from 'lucide-react';
-import { Button } from "@/Components/ui/Button";
+import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/Input"; // Added Input import
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/Components/ui/Card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/Components/ui/Tabs"; // Import Tabs components
