@@ -29,6 +29,7 @@ export default function Navbar() {
     { to: "/document-creation", label: "Document Generator" },
     { to: "/lawyer-connect", label: "Connect" },
     { to: "/my-documents", label: "My Documents" },
+    { to: "/chat", label: "Chat", requiresAuth: true },
   ];
 
   if (isAuthenticated && user?.role === 'lawyer') {

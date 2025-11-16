@@ -45,7 +45,7 @@ const Chat = () => {
   const loadMessages = async () => {
     try {
       console.log('Loading messages for conversation:', conversationId);
-      const response = await axios.get(`api/auth/chat/conversations/${conversationId}/messages/`);
+      const response = await axios.get(`api/chat/conversations/${conversationId}/messages/`);
       console.log('Messages response:', response.data);
       console.log('Number of messages:', response.data?.length || 0);
       setMessages(response.data || []);
@@ -60,7 +60,7 @@ const Chat = () => {
 
   const loadConversation = async () => {
     try {
-      const response = await axios.get('api/auth/chat/conversations/');
+      const response = await axios.get('api/chat/conversations/');
       const conv = response.data.find(c => c.id === conversationId);
       if (conv) {
         setConversation(conv);
@@ -87,7 +87,7 @@ const Chat = () => {
     setSending(true);
     try {
       console.log('Sending message:', newMessage.trim());
-      const response = await axios.post(`api/auth/chat/conversations/${conversationId}/messages/`, {
+      const response = await axios.post(`api/chat/conversations/${conversationId}/messages/`, {
         message: newMessage.trim(),
         message_type: 'text',
       });
@@ -108,7 +108,7 @@ const Chat = () => {
   const shareDocument = async (documentId, documentTitle) => {
     setSending(true);
     try {
-      await axios.post(`api/auth/chat/conversations/${conversationId}/messages/`, {
+      await axios.post(`api/chat/conversations/${conversationId}/messages/`, {
         message: `Shared document: ${documentTitle}`,
         message_type: 'document',
         document_id: documentId,
