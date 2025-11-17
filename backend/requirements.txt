@@ -32,3 +32,4 @@ celery==5.4.0
 redis==5.0.1
 django-redis==5.4.0
 channels_redis
+django-allauth
