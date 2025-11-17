@@ -74,6 +74,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "https://doc-gen-iota.vercel.app",
+    "https://se-project-navy.vercel.app",
     
 ]
 CORS_EXPOSE_HEADERS = ['Content-Disposition']
