@@ -3,6 +3,7 @@ import string
 from django.core.mail import send_mail
 from django.conf import settings
 from datetime import datetime, timedelta
+from smtplib import SMTPServerDisconnected, SMTPAuthenticationError
 
 def generate_otp():
     """Generate a 6-digit OTP"""
@@ -22,10 +23,16 @@ def create_and_send_otp(user):
     recipient_list = [user.email]
     
     try:
-        send_mail(subject, message, from_email, recipient_list)
+        send_mail(subject, message, from_email, recipient_list, fail_silently=False)
         return True
+    except SMTPServerDisconnected as e:
+        print(f"Error sending OTP email (SMTP Server Disconnected): {e}")
+        return False
+    except SMTPAuthenticationError as e:
+        print(f"Error sending OTP email (SMTP Authentication Error): {e}")
+        return False
     except Exception as e:
-        print(f"Error sending OTP email: {e}")
+        print(f"Error sending OTP email: {type(e).__name__} - {e}")
         return False
 
 def is_otp_valid(user, otp_code):

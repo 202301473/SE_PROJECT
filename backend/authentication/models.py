@@ -94,9 +94,9 @@ class User(Document):
     def save(self, *args, **kwargs):
         """Override save to handle password hashing"""
         # If password is set and not already hashed, hash it
-        if self.password and len(self.password) > 0 and not self.password.startswith('pbkdf2_'):
+        if self.password and '$' not in self.password:
             self.set_password(self.password)
-        return super(User, self).save(*args, **kwargs)
+        super(User, self).save(*args, **kwargs)
     
     @classmethod
     def create_user(cls, email, username, password=None, **extra_fields):

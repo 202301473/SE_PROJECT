@@ -448,16 +448,25 @@ class ResetPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     otp_code = serializers.CharField(required=True, max_length=6, min_length=6)
     new_password = serializers.CharField(
-        write_only=True, required=True, validators=[validate_password]
+        write_only=True, required=True
     )
     confirm_password = serializers.CharField(write_only=True, required=True)
 
     def validate(self, attrs):
         """Validate password match"""
-        if attrs["new_password"] != attrs["confirm_password"]:
+        new_password = attrs.get("new_password")
+        confirm_password = attrs.get("confirm_password")
+
+        if new_password != confirm_password:
             raise serializers.ValidationError(
                 {"confirm_password": "Password fields didn't match."}
             )
+        
+        try:
+            validate_password(new_password)
+        except Exception as e:
+            raise serializers.ValidationError({"new_password": list(e.messages)})
+
         return attrs
 
 class ChangePasswordSerializer(serializers.Serializer):

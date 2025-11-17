@@ -908,8 +908,10 @@ def forgot_password_view(request):
 @permission_classes([AllowAny])
 def reset_password_view(request):
     """Reset user password with OTP verification"""
+    print("Reset password request data:", request.data)  # Debugging line
     serializer = ResetPasswordSerializer(data=request.data)
     if not serializer.is_valid():
+        print("ResetPasswordSerializer errors:", serializer.errors) # Debugging line
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     email = serializer.validated_data["email"]
