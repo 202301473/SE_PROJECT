@@ -1,16 +1,13 @@
-import google.generativeai as genai
 from django.conf import settings
 import json
+from backend.utils.gemini_client import get_gemini_client, _get_llm_model_name # Centralized Gemini client
 
 def get_gemini_response(user_message, document_context=""):
     """
     Generates an AI response using the Gemini API based on the user message and document context.
     Returns the raw text response from the AI.
     """
-    if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY == '':
-        raise ValueError('GEMINI_API_KEY is not configured in your .env file or is empty.')
-
-    genai.configure(api_key=settings.GEMINI_API_KEY)
+    gemini_client_instance = get_gemini_client()
 
     system_instruction_text = """You are a helpful legal assistant. Your goal is to help the user create a legal document.
 - First, ask follow-up questions to gather all the necessary details.
@@ -39,9 +36,9 @@ def get_gemini_response(user_message, document_context=""):
     ]
 
     # Call Gemini API
-    chat_completion = genai.GenerativeModel('models/gemini-flash-lite-latest').generate_content(
+    chat_completion = gemini_client_instance.GenerativeModel(_get_llm_model_name()).generate_content(
         gemini_conversation_history,
-        generation_config=genai.GenerationConfig(
+        generation_config=gemini_client_instance.types.GenerationConfig(
             temperature=0.7,
             max_output_tokens=2000,
         ),

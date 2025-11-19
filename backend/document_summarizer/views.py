@@ -15,13 +15,8 @@ from authentication.models import User
 import fitz  # PyMuPDF for PDF
 from docx import Document
 from mongoengine import DoesNotExist
+from backend.utils.gemini_client import get_gemini_client, _get_llm_model_name # Import from centralized utility
 
-import google.generativeai as genai # Import Google Generative AI client
-
-try:
-    from google.api_core.exceptions import NotFound as GoogleModelNotFound
-except ImportError:  # pragma: no cover - optional dependency
-    GoogleModelNotFound = None
 
 # Import generalized false positive prevention framework
 try:
@@ -48,31 +43,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# Initialize Gemini client
-def get_gemini_client():
-    if not settings.GEMINI_API_KEY:
-        class MockPart:
-            def __init__(self, text):
-                self.text = text
-        class MockContent:
-            def __init__(self, text):
-                self.parts = [MockPart(text)]
-        class MockCandidate:
-            def __init__(self, text):
-                self.content = MockContent(text)
-        class MockGenerateContentResponse:
-            def __init__(self, text="This is a mock response from the AI."):
-                self.candidates = [MockCandidate(text)]
-        class MockGenerativeModel:
-            def generate_content(self, contents, **kwargs):
-                return MockGenerateContentResponse()
-        class MockGenai:
-            def __init__(self):
-                self.GenerativeModel = MockGenerativeModel
-        return MockGenai()
-        
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    return genai
+
 
 
 def _normalize_whitespace(text: str) -> str:
@@ -641,8 +612,7 @@ DEFAULT_REPLACEMENTS: Dict[str, str] = {
 }
 
 
-def _get_llm_model_name() -> str:
-    return getattr(settings, 'GEMINI_MODEL', 'gemini-flash-lite-latest')
+
 
 
 def _coerce_risk_score(value: Any, default: int = 3) -> int:
@@ -1059,7 +1029,7 @@ def _generate_comprehensive_summary(full_text: str, doc_type: str, llm, doc_type
         from langchain_google_genai import ChatGoogleGenerativeAI
         
         # Use gemini-2.5-flash for comprehensive summary
-        model_for_summary = "gemini-2.5-flash"  # Consistent with main config
+        model_for_summary = _get_llm_model_name()  # Consistent with main config
         
         # Fallback to base model if primary fails
         fallback_models = [
@@ -2451,7 +2421,7 @@ def chat_with_document(session, user_message):
     """Use Gemini API to answer questions about the document."""
     try:
         genai_client = get_gemini_client()
-        model = genai_client.GenerativeModel('gemini-flash-lite-latest')
+        model = genai_client.GenerativeModel(_get_llm_model_name())
         
         # Get chat history for context
         recent_messages = ChatMessage.objects(session=session).order_by('created_at')[:10]
