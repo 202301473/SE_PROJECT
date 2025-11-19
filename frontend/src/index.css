@@ -29,6 +29,7 @@
   --chart-4: #1e90ff;
   --chart-5: #00bfff;
   --radius: 0.625rem;
+  --navbar-height: 80px; /* Explicitly define navbar height */
 }
 
 .dark {

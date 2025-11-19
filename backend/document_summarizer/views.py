@@ -2576,6 +2576,9 @@ def summarize_document(request):
         )
         session.highlighted_preview = analysis.get('highlighted_preview') or html.escape(text).replace('\n', '<br />')
         session.high_risk_clauses = analysis.get('high_risk_clauses') or []
+        session.comprehensive_summary = analysis.get('comprehensive_summary')
+        session.document_type = analysis.get('document_type')
+        session.document_type_confidence = analysis.get('document_type_confidence')
         session.save()
         
         preview_text = analysis.get('preview_text') or text
@@ -2720,6 +2723,9 @@ def chat_history(request, session_id):
                 'highlighted_preview': session.highlighted_preview or '',
                 'high_risk_clauses': session.high_risk_clauses or [],
                 'preview_text': session.document_text,
+                'comprehensive_summary': session.comprehensive_summary or None,
+                'document_type': session.document_type or None,
+                'document_type_confidence': session.document_type_confidence or None,
                 'created_at': session.created_at.isoformat()
             }
         }, status=status.HTTP_200_OK)
@@ -2760,12 +2766,15 @@ def user_sessions(request):
             message_count = message_counts_map.get(session.id, 0) # Get count from map, default to 0
             sessions_data.append({
                 'id': str(session.id),
-                'summary_preview': session.summary[:150] + '...' if len(session.summary) > 150 else session.summary,
+                'summary_preview': (session.summary[:150] + '...' if len(session.summary) > 150 else session.summary) if session.summary else '',
                 'created_at': session.created_at.isoformat(),
-                'message_count': message_count,
-                'document_preview': session.document_text[:100] + '...' if len(session.document_text) > 100 else session.document_text,
+                'message_count': message_counts_map.get(session.id, 0),
+                'document_preview': (session.document_text[:100] + '...' if len(session.document_text) > 100 else session.document_text) if session.document_text else '',
                 'highlighted_preview': session.highlighted_preview or '',
                 'high_risk_clause_count': len(session.high_risk_clauses or []),
+                'comprehensive_summary': session.comprehensive_summary or None,
+                'document_type': session.document_type or None,
+                'document_type_confidence': session.document_type_confidence or None,
             })
         
         return Response({

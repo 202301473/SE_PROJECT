@@ -6,6 +6,7 @@ from mongoengine import (
     ReferenceField,
     ListField,
     DictField,
+    FloatField,
 )
 from datetime import datetime
 from authentication.models import User
@@ -17,6 +18,9 @@ class DocumentSession(Document):
     summary = StringField(required=True)
     highlighted_preview = StringField()
     high_risk_clauses = ListField(DictField())
+    comprehensive_summary = DictField() # New field for structured summary
+    document_type = StringField() # New field for document type
+    document_type_confidence = FloatField() # New field for document type confidence
     created_at = DateTimeField(default=datetime.utcnow)
     
     meta = {

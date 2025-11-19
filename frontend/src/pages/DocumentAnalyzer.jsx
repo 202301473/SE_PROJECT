@@ -74,6 +74,8 @@ const DocumentAnalyzer = () => {
   const [dragActive, setDragActive] = useState(false);
   const [isSummaryCopied, setIsSummaryCopied] = useState(false); // New state for copy status
   const [expandedSection, setExpandedSection] = useState(null); // Modal state: 'preview', 'analysis', 'chat', or null
+  const [documentType, setDocumentType] = useState(''); // New state for document type
+  const [documentTypeConfidence, setDocumentTypeConfidence] = useState(null); // New state for document type confidence
 
 
   const resetForNewDocument = () => {
@@ -318,6 +320,24 @@ const DocumentAnalyzer = () => {
       setHighlightedPreview(sessionPreviewHtml || '');
       setPreviewText(sessionPreviewPlain || '');
       setHighRiskClauses(Array.isArray(sessionRiskClauses) ? sessionRiskClauses : []);
+      setDocumentType(sessionInfo.document_type || session.document_type || '');
+      setDocumentTypeConfidence(sessionInfo.document_type_confidence || session.document_type_confidence || null);
+
+      // Update the sessions list with the newly loaded detailed summary
+      setSessions(prevSessions =>
+        prevSessions.map(s =>
+          (s.id ?? s._id) === (session.id ?? session._id)
+            ? {
+                ...s,
+                summary: sessionSummary,
+                summary_preview: sessionSummary, // Ensure summary_preview is updated
+                comprehensive_summary: sessionComprehensiveSummary,
+                document_type: sessionInfo.document_type || session.document_type || '',
+                document_type_confidence: sessionInfo.document_type_confidence || session.document_type_confidence || null,
+              }
+            : s
+        )
+      );
     } catch (err) {
       console.error(err);
       const message = err?.response?.data?.error || err?.message || 'Failed to load session';
@@ -386,14 +406,14 @@ const DocumentAnalyzer = () => {
       )}
 
       <div className={`
-        fixed inset-y-0 left-0 z-50 transform
+        fixed left-0 z-50 transform
         w-3/4 max-w-xs sm:w-64 lg:w-80
         transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0 lg:relative lg:z-10 lg:flex-shrink-0
         bg-card border-r border-border/50
-        flex flex-col h-full
-      `}>
+        flex flex-col h-[calc(100vh - var(--navbar-height))]
+      `} style={{ top: 'var(--navbar-height)' }}>
         {/* Only show content if sidebar is logically open or on large screens */}
         {(sidebarOpen || window.innerWidth >= 1024) && ( // Added window.innerWidth check for initial render
           <>
@@ -406,7 +426,7 @@ const DocumentAnalyzer = () => {
                   <h2 className="text-lg font-semibold text-foreground">History</h2>
                 </div>
                 {/* Close button for mobile, or always present if needed */}
-                <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+                <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-muted rounded-lg transition-colors lg:hidden">
                   <X className="w-5 h-5 text-muted-foreground" />
                 </button>
               </div>

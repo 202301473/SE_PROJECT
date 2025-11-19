@@ -37,7 +37,7 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="bg-background/80 sticky top-0 z-50 border-b py-4 border-border shadow-lg shadow-black/20 h-[var(--navbar-height)]">
+    <nav className="bg-background/80 sticky top-0 z-50 border-b py-4 border-border shadow-lg shadow-black/20">
       <div className="container mx-auto px-5 h-full">
         <div className="flex items-center justify-between h-17">
           <Link to="/" className="text-3xl font-extrabold text-white hover:text-primary transition-colors duration-200 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
