@@ -41,4 +41,4 @@ def get_gemini_client():
     return genai
 
 def _get_llm_model_name() -> str:
-    return getattr(settings, 'GEMINI_MODEL', 'gemini-flash-lite-latest')
+    return getattr(settings, 'GEMINI_MODEL', 'gemini-1.5-flash-latest')

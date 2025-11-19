@@ -2467,7 +2467,8 @@ Highlighted Preview (HIGH-RISK marks indicate clauses the analysis flagged):
 Please provide a helpful, accurate response based on the document content and summary.
 If the question cannot be answered from the document, politely state that.
 Keep your response clear and concise.
-"""]}
+"""]},
+            {"role": "model", "parts": ["Okay, I am ready to help you with your document."]}
         ]
         
         for msg in recent_messages:
@@ -2767,7 +2768,7 @@ def user_sessions(request):
             sessions_data.append({
                 'id': str(session.id),
                 'summary_preview': (session.summary[:150] + '...' if len(session.summary) > 150 else session.summary) if session.summary else '',
-                'created_at': session.created_at.isoformat(),
+                'created_at': session.created_at.isoformat() if session.created_at else None,
                 'message_count': message_counts_map.get(session.id, 0),
                 'document_preview': (session.document_text[:100] + '...' if len(session.document_text) > 100 else session.document_text) if session.document_text else '',
                 'highlighted_preview': session.highlighted_preview or '',
