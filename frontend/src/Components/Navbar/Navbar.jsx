@@ -37,7 +37,7 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="bg-background/80 backdrop-blur-md sticky top-0 z-50 border-b py-4 border-border shadow-lg shadow-black/20 h-[var(--navbar-height)]">
+    <nav className="bg-background/80 sticky top-0 z-50 border-b py-4 border-border shadow-lg shadow-black/20 h-[var(--navbar-height)]">
       <div className="container mx-auto px-5 h-full">
         <div className="flex items-center justify-between h-17">
           <Link to="/" className="text-3xl font-extrabold text-white hover:text-primary transition-colors duration-200 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
@@ -99,58 +99,75 @@ export default function Navbar() {
             <button 
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="p-3 rounded-lg hover:bg-foreground/10 transition-colors duration-200 text-muted-foreground hover:text-foreground"
-              aria-label="Toggle menu"
+              aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             >
-              <Menu size={23} />
+              {isMenuOpen ? <X size={23} /> : <Menu size={23} />}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile Menu Overlay */}
+      {/* Mobile Menu Overlay and Sidebar */}
       {isMenuOpen && (
-        <div className="md:hidden fixed inset-0 bg-background/90 backdrop-blur-md z-40 flex flex-col items-center justify-center space-y-8">
-          <button
+        <>
+          {/* Overlay */}
+          <div
+            className="md:hidden fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
             onClick={() => setIsMenuOpen(false)}
-            className="absolute top-5 right-5 p-3 rounded-lg hover:bg-foreground/10 transition-colors duration-200 text-foreground"
-          >
-            <X size={24} />
-          </button>
-          {navLinks.map((link, index) => (
-            ((!link.requiresAuth) || isAuthenticated) && (
-              <Link 
-                to={link.to} 
-                key={index} 
-                className="text-3xl font-bold text-foreground hover:text-primary transition-colors duration-200"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {link.label}
-              </Link>
-            )
-          ))}
-          {isAuthenticated ? (
-            <>
-              <Link to="/profile" className="text-3xl font-bold text-foreground hover:text-primary transition-colors duration-200" onClick={() => setIsMenuOpen(false)}>
-                Profile
-              </Link>
-              <Button 
-                onClick={() => { logout(); setIsMenuOpen(false); }} 
-                variant="outline" 
-                size="lg"
-                className="border-border hover:border-destructive hover:bg-destructive/10 hover:text-destructive transition-all duration-200 text-3xl font-bold"
-              >
-                <LogOut size={25} className="mr-3" />
-                Logout
-              </Button>
-            </>
-          ) : (
-            <Link to="/login" className="text-3xl font-bold text-foreground hover:text-primary transition-colors duration-200" onClick={() => setIsMenuOpen(false)}>
-              <Button size="lg" className="bg-gradient-to-r from-primary to-secondary hover:from-primary hover:to-secondary text-white shadow-md shadow-primary/30 hover:shadow-lg shadow-primary/40 transition-all duration-200 text-3xl font-bold">
-                Login
-              </Button>
-            </Link>
-          )}
-        </div>
+          ></div>
+
+                    {/* Sidebar Panel */}
+
+                    <div className={`md:hidden fixed top-0 bottom-0 left-0 w-64 bg-background z-[51] flex flex-col items-start space-y-8 p-6 transition-transform duration-300 ease-in-out ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ height: 'calc(100vh - var(--navbar-height))', top: 'var(--navbar-height)' }}>
+            <button
+              onClick={() => setIsMenuOpen(false)}
+              className="absolute  top-5 right-5 p-3 rounded-lg hover:bg-foreground/10 transition-colors duration-200 text-foreground"
+            >
+              <X size={24} />
+            </button>
+            <div className="flex flex-col space-y-4 pt-10 w-full"> {/* Added pt-10 for spacing from close button */}
+              {navLinks.map((link, index) => (
+                ((!link.requiresAuth) || isAuthenticated) && (
+                  <Link 
+                    to={link.to} 
+                    key={index} 
+                    className="text-xl font-bold text-foreground hover:text-primary transition-colors duration-200"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {link.label}
+                  </Link>
+                )
+              ))}
+              {isAuthenticated ? (
+                <>
+                  <Link to="/profile" className="text-xl font-bold text-foreground hover:text-primary transition-colors duration-200" onClick={() => setIsMenuOpen(false)}>
+                    Profile
+                  </Link>
+                  <Button 
+                    onClick={() => { logout(); setIsMenuOpen(false); }} 
+                    variant="outline" 
+                    size="lg"
+                    className="border-border hover:border-destructive hover:bg-destructive/10 hover:text-destructive transition-all duration-200 text-xl font-bold w-full"
+                  >
+                    <LogOut size={20} className="mr-3" />
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  asChild
+                  size="lg"
+                  className="bg-gradient-to-r from-primary to-secondary hover:from-primary hover:to-secondary text-white shadow-md shadow-primary/30 hover:shadow-lg shadow-primary/40 transition-all duration-200 text-xl font-bold w-full"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <Link to="/login">
+                    Login
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </nav>
   );

@@ -15,7 +15,7 @@ from authentication.models import User
 import fitz  # PyMuPDF for PDF
 from docx import Document
 from mongoengine import DoesNotExist
-from backend.utils.gemini_client import get_gemini_client, _get_llm_model_name # Import from centralized utility
+from utils.gemini_client import get_gemini_client, _get_llm_model_name # Import from centralized utility
 
 
 # Import generalized false positive prevention framework

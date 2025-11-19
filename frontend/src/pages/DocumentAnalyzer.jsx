@@ -366,7 +366,7 @@ const DocumentAnalyzer = () => {
   );
 
   return (
-    <div className="flex h-[89vh] bg-background">
+    <div className="flex min-h-[calc(100vh - var(--navbar-height))] bg-background">
       {/* Animated background effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 -left-48 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />
@@ -377,70 +377,86 @@ const DocumentAnalyzer = () => {
       </div>
 
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 h-full relative z-[5]`}>
-        <div className={`${sidebarOpen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300 bg-card/60 backdrop-blur-xl border-r border-border/50 flex flex-col h-full`}>
-          {sidebarOpen && (
-            <>
-              <div className="p-6 border-b border-border/50 flex-shrink-0">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
-                      <History className="w-5 h-5 text-foreground" />
-                    </div>
-                    <h2 className="text-lg font-semibold text-foreground">History</h2>
-                  </div>
-                  <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
-                    <X className="w-5 h-5 text-muted-foreground" />
-                  </button>
-                </div>
-                <p className="text-sm text-muted-foreground">Previous sessions</p>
-              </div>
+      {/* Overlay for small screens when sidebar is open */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          className="lg:hidden fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
+        ></div>
+      )}
 
-              <div className="h-[70vh] overflow-y-auto p-4 custom-scrollbar">
-                {loadingSessions ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      <div className={`
+        fixed inset-y-0 left-0 z-50 transform
+        w-3/4 max-w-xs sm:w-64 lg:w-80
+        transition-transform duration-300 ease-in-out
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:translate-x-0 lg:relative lg:z-10 lg:flex-shrink-0
+        bg-card border-r border-border/50
+        flex flex-col h-full
+      `}>
+        {/* Only show content if sidebar is logically open or on large screens */}
+        {(sidebarOpen || window.innerWidth >= 1024) && ( // Added window.innerWidth check for initial render
+          <>
+            <div className="p-6 border-b border-border/50 flex-shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-lg">
+                    <History className="w-5 h-5 text-foreground" />
                   </div>
-                ) : sessions.length > 0 ? (
-                  <div className="space-y-2">
-                    {sessions.map((session) => (
-                      <button
-                        key={session.id ?? session._id}
-                        onClick={() => openSession(session)}
-                        className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${
-                          sessionId === (session.id ?? session._id)
-                            ? 'bg-gradient-to-br from-primary/20 to-secondary/20 border-primary/50 shadow-lg shadow-primary/20'
-                            : 'bg-card/40 border-border/50 hover:bg-card/60 hover:border-border'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <FileText className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-foreground font-medium line-clamp-2 mb-2">{session.summary_preview || session.title || 'Document Analysis'}</p>
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">{formatDate(session.created_at || session.createdAt || session.date)}</span>
-                              {Number(session.message_count || session.messages_count || 0) > 0 && (
-                                <span className="bg-primary/20 text-primary px-2 py-0.5 rounded-full">{session.message_count || session.messages_count}</span>
-                              )}
-                            </div>
+                  <h2 className="text-lg font-semibold text-foreground">History</h2>
+                </div>
+                {/* Close button for mobile, or always present if needed */}
+                <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+                  <X className="w-5 h-5 text-muted-foreground" />
+                </button>
+              </div>
+              <p className="text-sm text-muted-foreground">Previous sessions</p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar"> {/* Removed fixed height */}
+              {loadingSessions ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                </div>
+              ) : sessions.length > 0 ? (
+                <div className="space-y-2">
+                  {sessions.map((session) => (
+                    <button
+                      key={session.id ?? session._id}
+                      onClick={() => openSession(session)}
+                      className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${
+                        sessionId === (session.id ?? session._id)
+                          ? 'bg-gradient-to-br from-primary/20 to-secondary/20 border-primary/50 shadow-lg shadow-primary/20'
+                          : 'bg-card/40 border-border/50 hover:bg-card/60 hover:border-border'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <FileText className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-foreground font-medium line-clamp-2 mb-2">{session.summary_preview || session.title || 'Document Analysis'}</p>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">{formatDate(session.created_at || session.createdAt || session.date)}</span>
+                            {Number(session.message_count || session.messages_count || 0) > 0 && (
+                              <span className="bg-primary/20 text-primary px-2 py-0.5 rounded-full">{session.message_count || session.messages_count}</span>
+                            )}
                           </div>
                         </div>
-                      </button>
-                    ))}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="p-4 bg-card/40 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                    <History className="w-8 h-8 text-muted-foreground" />
                   </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <div className="p-4 bg-card/40 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                      <History className="w-8 h-8 text-muted-foreground" />
-                    </div>
-                    <p className="text-muted-foreground text-sm mb-1">No previous sessions</p>
-                    <p className="text-muted-foreground text-xs">Upload a document to start</p>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+                  <p className="text-muted-foreground text-sm mb-1">No previous sessions</p>
+                  <p className="text-muted-foreground text-xs">Upload a document to start</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Sidebar toggle button */}
@@ -454,8 +470,8 @@ const DocumentAnalyzer = () => {
       )}
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="max-w-7xl mx-auto p-6 lg:p-12 flex-1 flex flex-col w-full h-full">
+      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-80' : ''}`}>
+        <div className="max-w-7xl mx-auto p-6 lg:p-12 flex-1 flex flex-col w-full">
           {/* Upload / Summary header */}
           {!hasAnalysis ? (
             <div className="mb-8">
@@ -547,9 +563,9 @@ const DocumentAnalyzer = () => {
 
           {/* Analysis & Chat Grid */}
           {hasAnalysis && (
-            <div className="grid lg:grid-cols-3 gap-6 h-[60vh]">
+            <div className="grid lg:grid-cols-3 gap-6 flex-1">
               {/* Left Column: Document Preview + Analysis */}
-              <div className="lg:col-span-2 flex flex-col gap-6 h-[60vh] overflow-y-auto custom-scrollbar">
+              <div className="lg:col-span-2 flex flex-col gap-6 flex-1 overflow-y-auto custom-scrollbar">
                 {/* Document Preview */}
                 <div className="bg-card/40 backdrop-blur-xl rounded-2xl border border-border/50 overflow-hidden">
                   <div className="p-6 border-b border-border/50 bg-gradient-to-r from-primary/5 to-secondary/5 flex items-center justify-between">
@@ -901,7 +917,7 @@ const DocumentAnalyzer = () => {
               </div>
 
               {/* Right Column: Questions/Chat Interface */}
-              <div className="lg:col-span-1 flex flex-col h-[60vh]">
+              <div className="lg:col-span-1 flex flex-col flex-1">
                 <div className="bg-card/40 backdrop-blur-xl rounded-2xl border border-border/50 overflow-hidden flex flex-col h-full">
                   <div className="p-6 border-b border-border/50 bg-gradient-to-r from-primary/5 to-secondary/5 flex-shrink-0">
                     <div className="flex items-center justify-between mb-2">

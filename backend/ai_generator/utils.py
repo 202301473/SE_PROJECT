@@ -1,6 +1,7 @@
 from django.conf import settings
 import json
-from backend.utils.gemini_client import get_gemini_client, _get_llm_model_name # Centralized Gemini client
+from utils.gemini_client import get_gemini_client, _get_llm_model_name # Centralized Gemini client
+import google.api_core.exceptions
 
 def get_gemini_response(user_message, document_context=""):
     """
@@ -36,19 +37,34 @@ def get_gemini_response(user_message, document_context=""):
     ]
 
     # Call Gemini API
-    chat_completion = gemini_client_instance.GenerativeModel(_get_llm_model_name()).generate_content(
-        gemini_conversation_history,
-        generation_config=gemini_client_instance.types.GenerationConfig(
-            temperature=0.7,
-            max_output_tokens=2000,
-        ),
-        safety_settings=[
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ]
-    )
-    
-    response_text = chat_completion.candidates[0].content.parts[0].text
-    return response_text
+    try:
+        chat_completion = gemini_client_instance.GenerativeModel(_get_llm_model_name()).generate_content(
+            gemini_conversation_history,
+            generation_config=gemini_client_instance.types.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=2000,
+            ),
+            safety_settings=[
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+        )
+        response_text = chat_completion.candidates[0].content.parts[0].text
+        return response_text
+    except google.api_core.exceptions.ResourceExhausted as e:
+        error_message = f"Quota exceeded for Gemini API. Please try again later. Details: {e}"
+        print(f"ERROR: {error_message}") # Log to console for debugging
+        # Return a structured error response that the frontend can parse
+        return json.dumps({
+            "type": "error",
+            "text": "I'm sorry, I've hit my daily limit for generating content. Please try again after some time. If this persists, the project owner might need to upgrade the Gemini API plan."
+        })
+    except Exception as e:
+        error_message = f"An unexpected error occurred with the Gemini API: {e}"
+        print(f"ERROR: {error_message}") # Log to console for debugging
+        return json.dumps({
+            "type": "error",
+            "text": "An unexpected error occurred while communicating with the AI. Please try again."
+        })

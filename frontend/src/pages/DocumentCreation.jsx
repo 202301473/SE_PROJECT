@@ -119,11 +119,8 @@ const DocumentCreation = () => {
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
-      }
+      // Keep sidebar open by default on large screens
+      setSidebarOpen(window.innerWidth >= 1024); 
     };
 
     window.addEventListener('resize', handleResize);
@@ -497,7 +494,7 @@ const DocumentCreation = () => {
                 </div>
               </div>
 
-              <div className="flex gap-4 items-end">
+              <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
                 <div className="flex-1 relative">
                   <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
@@ -608,14 +605,26 @@ const DocumentCreation = () => {
       </div>
 
       {/* Left Sidebar - Chat */}
-     <div className={`${sidebarOpen ? 'translate-x-0 w-80 opacity-100' : '-translate-x-full max-w-0 opacity-0 pointer-events-none'} transition-all duration-300 bg-gradient- to-b from-card/95 to-card/95 backdrop-blur-xl border-r border-border/10 flex flex-col absolute z-20 overflow-hidden h-full`}> 
-        <div className="p-4 border-b border-border/10">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <MessageCircle className="w-5 h-5 text-primary" />
-              <span className="text-foreground font-semibold text-sm">Chat History</span>
-            </div>
-          </div>
+          <div className={`
+             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
+             md:w-64 lg:w-80 md:relative md:translate-x-0 
+             transition-all duration-300 ease-in-out 
+             fixed top-0 bottom-0 left-0 z-[51] lg:z-10 
+             bg-card border-r border-border/50 
+             flex flex-col overflow-hidden h-full w-3/4 max-w-xs
+             lg:flex-shrink-0
+          `} style={{ height: 'calc(100vh - var(--navbar-height))', top: 'var(--navbar-height)' }}>        <div className="p-4 border-b border-border/10">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <MessageCircle className="w-5 h-5 text-primary" />
+                          <span className="text-foreground font-semibold text-sm">Chat History</span>
+                        </div>
+                        <button
+                          onClick={() => setSidebarOpen(false)}
+                          className="p-1.5 hover:bg-muted rounded-lg transition-colors lg:hidden"
+                        >
+                          <X className="w-4 h-4 text-muted-foreground" />
+                        </button>          </div>
         </div>
 
         <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 custom-scrollbar">
@@ -678,7 +687,7 @@ const DocumentCreation = () => {
       </div>
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col relative z-10 h-full overflow-hidden transition-all duration-300 ${sidebarOpen ? 'ml-80' : 'ml-0'}`}>
+      <div className={`flex-1 flex flex-col relative z-10 h-full overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-80' : ''}`}>
         {/* Top Bar */}
         <div className="px-6 py-4 bg-gradient-to-r from-card/80 to-card/80 backdrop-blur-xl border-b border-border/10 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-4 min-w-0 flex-1">
@@ -846,7 +855,10 @@ const DocumentCreation = () => {
       </div>
 
       {/* Right Sidebar - Comments */}
-      <div className={`${commentsSidebarOpen ? 'translate-x-0 w-80 opacity-100' : 'translate-x-full max-w-0 opacity-0 pointer-events-none'} transition-all duration-300 bg-gradient-to-b from-card/95 to-card/95 backdrop-blur-xl border-l border-border/10 flex flex-col absolute right-0 z-20 overflow-hidden h-full`}>
+      <div className={`
+        bg-card border-l border-border/10 
+        flex flex-col overflow-hidden h-full
+      `}>
         {commentsSidebarOpen && mongoConversationId && (
           <div className="flex flex-col h-full">
             <div className="p-4 border-b border-border/10 flex items-center justify-between">
@@ -869,7 +881,14 @@ const DocumentCreation = () => {
       </div>
 
       {/* Right Sidebar - Versions */}
-      <div className={`${isVersionsSidebarOpen ? 'translate-x-0 w-80 opacity-100' : 'translate-x-full max-w-0 opacity-0 pointer-events-none'} transition-all duration-300 bg-gradient-to-b from-card/95 to-card/95 backdrop-blur-xl border-l border-border/10 flex flex-col absolute right-0 z-20 overflow-hidden h-full`}>
+      <div className={`
+        ${isVersionsSidebarOpen ? 'translate-x-0' : 'translate-x-full'} 
+        w-3/4 max-w-xs md:w-64 lg:w-80
+        transition-all duration-300 ease-in-out 
+        fixed top-0 bottom-0 right-0 z-[51] 
+        bg-card border-l border-border/10 
+        flex flex-col overflow-hidden h-full
+      `} style={{ height: 'calc(100vh - var(--navbar-height))', top: 'var(--navbar-height)' }}>
         <VersionsSidebar
           conversationId={mongoConversationId}
           onSelectVersion={handleSelectVersion}
