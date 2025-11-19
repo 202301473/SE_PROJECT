@@ -642,7 +642,7 @@ DEFAULT_REPLACEMENTS: Dict[str, str] = {
 
 
 def _get_llm_model_name() -> str:
-    return getattr(settings, 'GEMINI_MODEL', 'gemini-2.5-flash')
+    return getattr(settings, 'GEMINI_MODEL', 'gemini-flash-lite-latest')
 
 
 def _coerce_risk_score(value: Any, default: int = 3) -> int:
@@ -1908,9 +1908,195 @@ def generate_document_analysis(text: str) -> Dict[str, Any]:
 
     structured_llm = llm.with_structured_output(DocumentAnalysis)
 
+import concurrent.futures # New import
+
+# ... (rest of the imports)
+
+def generate_document_analysis(text: str) -> Dict[str, Any]:
+    """Run LangChain + Gemini to summarize and flag risky clauses."""
+    full_text = text
+    preview_excerpt = text[:2000]
+    truncated_document = text[:6000]
+    chunks = _chunk_document(full_text)
+    keyword_sentences = _extract_keyword_sentences(full_text)
+
+    global LLM_AVAILABLE, LLM_LAST_ERROR
+
+    if not settings.GEMINI_API_KEY or not LLM_AVAILABLE:
+        if not settings.GEMINI_API_KEY:
+            logger.warning("GEMINI_API_KEY not configured; falling back to heuristic analysis.")
+        elif LLM_LAST_ERROR:
+            logger.warning("Gemini model disabled due to previous error: %s", LLM_LAST_ERROR)
+
+        analysis = _generate_mock_analysis(full_text, preview_excerpt, truncated_document)
+        if LLM_LAST_ERROR:
+            note = "\n\nLLM Note: Gemini call disabled ({error}). Configure settings.GEMINI_MODEL with a supported model name or update API access.".format(
+                error=LLM_LAST_ERROR.split('\n')[0]
+            )
+            analysis['summary'] = (analysis.get('summary') or '') + note
+        return analysis
+
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain_core.prompts import ChatPromptTemplate
+        from pydantic import BaseModel, Field
+    except ImportError as exc:
+        logger.warning("LangChain dependencies are missing: %s", exc)
+        return _generate_mock_analysis(full_text, preview_excerpt, truncated_document)
+
+    class ClauseHighlight(BaseModel):
+        clause_text: str = Field(..., description="Exact clause copied from the chunk that signals elevated risk.")
+        risk_score: int = Field(..., description="Integer risk score from 1 (minimal) to 5 (critical).", ge=1, le=5)
+        risk_level: str = Field(..., description="Risk severity label that aligns with the assigned risk_score.")
+        rationale: str = Field(..., description="Brief explanation (<=50 words) of why the clause is risky.")
+        mitigation: str = Field(..., description="Specific revision or negotiation request (<=45 words) to reduce the highlighted risk.")
+        replacement_clause: str = Field(..., description="Low-risk replacement clause in formal legal language that can substitute the risky clause.")
+
+    class DocumentAnalysis(BaseModel):
+        summary: str = Field(..., description="Concise (<=140 words) synopsis of the chunk.")
+        high_risk_clauses: List[ClauseHighlight] = Field(default_factory=list, description="Clauses in the chunk that warrant attention.")
+
+    # Step 1: Classify document type for tailored analysis
+    from .document_classifier import classify_document, get_type_specific_system_prompt, get_type_specific_examples, DOCUMENT_TYPES
+    from .enhanced_risk_patterns import (
+        get_enhanced_risk_patterns_by_type,
+        generate_dynamic_alternative_clause,
+        get_type_specific_mitigation_strategies
+    )
+    
+    doc_type, confidence = classify_document(full_text, title='')
+    doc_type_name = DOCUMENT_TYPES.get(doc_type, {}).get('name', 'General Agreement')
+    logger.info(f"Document classified as: {doc_type_name} (confidence: {confidence:.0%})")
+    
+    # Get type-specific prompts
+    type_specific_prompt = get_type_specific_system_prompt(doc_type)
+    type_specific_examples = get_type_specific_examples(doc_type)
+    
+    # Get enhanced risk patterns and mitigation strategies for this document type
+    risk_patterns = get_enhanced_risk_patterns_by_type(doc_type)
+    mitigation_strategies = get_type_specific_mitigation_strategies(doc_type)
+    
+    # Build detailed pattern context for chunk analysis
+    pattern_guidance = ""
+    if risk_patterns:
+        pattern_details = []
+        for risk_category, pattern_info in risk_patterns.items():
+            pattern_details.append(
+                f"\n{risk_category.replace('_', ' ').title()}:\n"
+                f"  Risk: {pattern_info['context']}\n"
+                f"  Severity: {pattern_info['severity']}/5\n"
+                f"  Solution Approach: {pattern_info['solution_template'][:150]}...\n"
+                f"  Replacement Pattern: {pattern_info['alternative_pattern'][:150]}..."
+            )
+        if pattern_details:
+            pattern_guidance = (
+                f"\n\n=== ENHANCED {doc_type_name.upper()} RISK DETECTION PATTERNS ===\n" +
+                "\n".join(pattern_details[:5]) +  # Show top 5 patterns
+                f"\n\n=== MITIGATION STRATEGIES FOR {doc_type_name.upper()} ===\n"
+                f"General: {mitigation_strategies.get('general', '')}\n"
+            )
+    
+    # Get improved prompts and enhance with type-specific content and patterns
+    improved_prompts = get_improved_system_messages()
+    improved_prompts['system_prompt'] = type_specific_prompt + pattern_guidance
+    
+    # Build example messages from type-specific examples
+    example_messages = []
+    if type_specific_examples and len(type_specific_examples) > 0:
+        # Use first example as the demonstration
+        example = type_specific_examples[0]
+        example_messages.extend([
+            (
+                'human',
+                f"Example chunk:\n{example['clause_text']}"
+            ),
+            (
+                'ai',
+                '{{"summary": "' + example['rationale'] + '", "high_risk_clauses": ['
+                '{{"clause_text": "' + example['clause_text'] + '", '
+                f'"risk_score": {example["risk_score"]}, "risk_level": "{example["risk_level"]}", '
+                '"rationale": "' + example['rationale'] + '", '
+                '"mitigation": "' + example['mitigation'] + '", '
+                '"replacement_clause": "' + example['replacement_clause'] + '"}}]}}'
+            )
+        ])
+    else:
+        # Fallback to generic example
+        example_messages.extend([
+            (
+                'human',
+                "Example chunk:\nThe Supplier shall indemnify and hold harmless the Client from any and all claims, damages, and expenses."
+            ),
+            (
+                'ai',
+                '{{"summary": "Broad indemnity shifting losses to supplier.", "high_risk_clauses": ['
+                '{{"clause_text": "The Supplier shall indemnify and hold harmless the Client from any and all claims, damages, and expenses.", '
+                '"risk_score": 5, "risk_level": "Critical", "rationale": "Broad indemnity obligates the supplier to cover all claims and expenses.", '
+                '"mitigation": "Limit indemnity to third-party losses caused by the supplier and cap recovery to amounts paid.", '
+                '"replacement_clause": "Each party shall indemnify the other solely for third-party claims arising from its own negligence or willful misconduct, subject to the liability caps set forth in this Agreement."}}]}}'
+            )
+        ])
+    
+    prompt = ChatPromptTemplate.from_messages([
+        (
+            'system',
+            improved_prompts['system_prompt']
+        ),
+        (
+            'system',
+            'Output must be a single valid JSON object that conforms to the schema. Do not wrap the JSON in code fences, prose, or commentary.'
+        ),
+        (
+            'system',
+            improved_prompts['chunk_instructions']
+        ),
+        (
+            'system',
+            f'For each risky clause in this {doc_type_name}, provide SPECIFIC, ACTIONABLE mitigation based on industry best practices. '
+            f'General guidance: {mitigation_strategies.get("general", "Negotiate balanced terms with clear limits and mutual obligations.")} '
+            'Maximum 45 words per mitigation.'
+        ),
+        (
+            'system',
+            f'Draft replacement clauses that: (1) address the specific risk type identified, (2) follow {doc_type_name} best practices, '
+            '(3) include concrete terms/timeframes/limits where applicable, (4) use formal legal language suitable for contract negotiation. Maximum 120 words per clause.'
+        ),
+        *example_messages,
+        (
+            'human',
+            "Chunk {chunk_index} of length {chunk_length} characters:\n{chunk_text}\n\n"
+            "Return a JSON object with keys 'summary' and 'high_risk_clauses'.\n"
+            "- 'summary' must be <=140 words describing the chunk risk profile.\n"
+            "- 'high_risk_clauses' must be a list of 0-4 objects, each containing 'clause_text', 'risk_score', 'risk_level', 'rationale', 'mitigation', and 'replacement_clause'.\n"
+            "- 'risk_score' is an integer 1-5 where 5 is most severe; align risk_level wording with the numeric rating.\n"
+            "\n"
+            "CRITICAL FOR 'clause_text':\n"
+            "  • Extract COMPLETE clauses starting at sentence/paragraph boundaries\n"
+            "  • Include full sentences forming ONE coherent statement about the risk\n"
+            "  • DO NOT start mid-sentence or with fragments\n"
+            "  • Minimum 20-30 words for completeness\n"
+            "  • Copy verbatim from this chunk\n"
+            "\n"
+            "- Keep rationale under 50 words.\n"
+            "- 'mitigation' must be <=45 words describing a concrete revision or negotiation ask to reduce the risk.\n"
+            "- 'replacement_clause' must be formal legal language (<=120 words) offering a safer substitute clause that addresses the risk.\n"
+            "- If no risky language, use an empty list and note the chunk appears low risk."
+        ),
+    ])
+
+    llm = ChatGoogleGenerativeAI(
+        model=_get_llm_model_name(),
+        temperature=0.15,
+        max_output_tokens=1200,
+        google_api_key=settings.GEMINI_API_KEY,
+        # DO NOT set response_mime_type - conflicts with with_structured_output()
+    )
+
+    structured_llm = llm.with_structured_output(DocumentAnalysis)
+
     summary_parts: List[str] = []
     clause_candidates: List[Dict[str, Any]] = []
-    chunk_results: List[Dict[str, Any]] = []  # Track all chunk results for comprehensive summary
+    chunk_results: List[Dict[str, Any]] = [None] * len(chunks) # Pre-allocate for ordered results
 
     if not chunks:
         chunks = [{'text': full_text, 'start': 0, 'end': len(full_text)}]
@@ -1925,24 +2111,58 @@ def generate_document_analysis(text: str) -> Dict[str, Any]:
     if not llm_indices and chunks:
         llm_indices = {0}
 
-    for idx, chunk in enumerate(chunks):
-        if idx in llm_indices:
-            chunk_result = _analyze_chunk_with_llm(
-                chunk=chunk,
-                idx=idx,
-                prompt=prompt,
-                structured_llm=structured_llm,
-            )
-        else:
-            chunk_result = {
-                'summary': textwrap.shorten(chunk['text'].replace('\n', ' '), width=260, placeholder='…'),
-                'high_risk_clauses': _fallback_risk_clauses(chunk['text'], limit=2),
-            }
+    # Max workers for ThreadPoolExecutor. Adjust based on available resources and API rate limits.
+    # A common heuristic for I/O bound tasks is (2 * num_cores) + 1.
+    # Given Gemini API calls are primary I/O, a higher number might be fine but needs testing.
+    # Let's start with 4 workers to avoid overwhelming the API or local resources.
+    # We should also consider settings.CELERY_WORKER_COUNT or a similar config if available.
+    num_workers = min(len(chunks), 4) # Don't use more workers than chunks
 
-        chunk_results.append(chunk_result)  # Store for comprehensive summary
-        if chunk_result.get('summary'):
-            summary_parts.append(chunk_result['summary'])
-        clause_candidates.extend(chunk_result.get('high_risk_clauses') or [])
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+        futures = {}
+        for idx, chunk in enumerate(chunks):
+            if idx in llm_indices:
+                future = executor.submit(
+                    _analyze_chunk_with_llm,
+                    chunk=chunk,
+                    idx=idx,
+                    prompt=prompt,
+                    structured_llm=structured_llm,
+                )
+            else:
+                # For non-LLM chunks, just run the fallback directly (it's fast and doesn't need a separate thread)
+                # Or submit a simple lambda for consistency in result collection
+                future = executor.submit(
+                    lambda c, i: {
+                        'summary': textwrap.shorten(c['text'].replace('\n', ' '), width=260, placeholder='…'),
+                        'high_risk_clauses': _fallback_risk_clauses(c['text'], limit=2),
+                    },
+                    chunk,
+                    idx
+                )
+            futures[future] = idx # Map future back to original index
+
+        for future in concurrent.futures.as_completed(futures):
+            idx = futures[future]
+            try:
+                chunk_result = future.result()
+                chunk_results[idx] = chunk_result
+            except Exception as exc:
+                logger.error(f"Error processing chunk {idx} in parallel: {exc}", exc_info=True)
+                # Fallback for failed LLM chunk if any
+                chunk_results[idx] = {
+                    'summary': textwrap.shorten(chunks[idx]['text'].replace('\n', ' '), width=260, placeholder='…'),
+                    'high_risk_clauses': _fallback_risk_clauses(chunks[idx]['text'], limit=2),
+                }
+
+    # After parallel execution, process ordered_chunk_results
+    for chunk_result in chunk_results:
+        if chunk_result: # Ensure it's not None
+            if chunk_result.get('summary'):
+                summary_parts.append(chunk_result['summary'])
+            clause_candidates.extend(chunk_result.get('high_risk_clauses') or [])
+    
+    # ... (rest of the generate_document_analysis function)
 
     if keyword_sentences and len(clause_candidates) < 6:
         focus_result = _analyze_focus_snippets(
@@ -2544,7 +2764,6 @@ def chat_history(request, session_id):
 def user_sessions(request):
     """Get user's document sessions"""
     try:
-        # Get user from JWT token (request.user is already a User object)
         user = request.user
         
         if not user:
@@ -2552,12 +2771,23 @@ def user_sessions(request):
                 'error': 'User not found'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        sessions = DocumentSession.objects(user=user).order_by('-created_at')
+        sessions = list(DocumentSession.objects(user=user).order_by('-created_at')) # Fetch all sessions
         
-        # Get message count for each session
+        session_ids = [session.id for session in sessions]
+        
+        # Aggregate message counts for all sessions in a single query
+        # Using MongoEngine's ._collection.aggregate for direct MongoDB aggregation pipeline
+        message_counts = list(ChatMessage._collection.aggregate([
+            {'$match': {'session': {'$in': session_ids}}},
+            {'$group': {'_id': '$session', 'count': {'$sum': 1}}}
+        ]))
+        
+        # Convert list of dicts to a dict for easy lookup
+        message_counts_map = {item['_id']: item['count'] for item in message_counts}
+        
         sessions_data = []
         for session in sessions:
-            message_count = ChatMessage.objects(session=session).count()
+            message_count = message_counts_map.get(session.id, 0) # Get count from map, default to 0
             sessions_data.append({
                 'id': str(session.id),
                 'summary_preview': session.summary[:150] + '...' if len(session.summary) > 150 else session.summary,
