@@ -83,6 +83,7 @@ CORS_EXPOSE_HEADERS = ['Content-Disposition']
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

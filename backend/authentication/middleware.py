@@ -2,19 +2,25 @@ from channels.auth import AuthMiddlewareStack
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from rest_framework_simplejwt.tokens import AccessToken
-from django.contrib.auth import get_user_model
+from authentication.models import User
 from urllib.parse import parse_qs
 
 @database_sync_to_async
 def get_user_from_token(token):
-    User = get_user_model()
     try:
         print(f"Backend: Attempting to authenticate token: {token[:30]}...") # Log token start
         access_token = AccessToken(token)
         user_id = access_token['user_id']
-        user = User.objects.get(id=user_id)
-        print(f"Backend: Token authenticated successfully for user: {user.username}") # Log success
-        return user
+        
+        # Use MongoEngine query
+        user = User.objects(id=user_id).first()
+        
+        if user:
+            print(f"Backend: Token authenticated successfully for user: {user.username}") # Log success
+            return user
+        else:
+            print(f"Backend: User not found for token user_id: {user_id}")
+            return AnonymousUser()
     except Exception as e:
         print(f"Backend: Token authentication failed: {e}") # Log failure reason
         return AnonymousUser()
@@ -42,5 +48,3 @@ class TokenAuthMiddleware:
         print(f"Backend: User in scope after TokenAuthMiddleware: {scope['user']}") # Log user in scope
 
         return await self.inner(scope, receive, send)
-
-

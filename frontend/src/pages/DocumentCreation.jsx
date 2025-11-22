@@ -1,41 +1,49 @@
-
+// DocumentCreation.jsx - cleaned and functional version
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { FileText, PenTool, Send, Download, User, Bot, Save, Edit, Eye, Bold, Italic, Strikethrough, Code, Pilcrow, Heading1, Heading2, Heading3, Indent as IndentIcon, Outdent as OutdentIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify, Underline as UnderlineIcon, MessageCircle, History, FileCheck, Minus, Menu, X, XCircle, Maximize, Share2 } from 'lucide-react'; // Added Maximize, Share2
+import {
+  FileText,
+  PenTool,
+  Send,
+  Download,
+  User,
+  Bot,
+  Save,
+  Edit,
+  Eye,
+  Maximize,
+  Share2,
+  MessageCircle,
+  History,
+  Menu,
+  X,
+} from 'lucide-react';
 import axios from '../api/axios';
 import { saveAs } from 'file-saver';
 import '../styles/MarkdownPreview.css';
 import toast from 'react-hot-toast';
 import DOMPurify from 'dompurify';
-import { Button } from "@/Components/ui/button";
-import { Input } from "@/Components/ui/Input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/Components/ui/Card";
+import { Button } from '@/Components/ui/button';
+import { Input } from '@/Components/ui/Input';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/Components/ui/Card';
 
-import { useEditor, EditorContent, Editor } from '@tiptap/react'; // Import Editor
-import StarterKit from '@tiptap/starter-kit'; // Corrected import
+import { useEditor, EditorContent, Editor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
 import { Indent } from '../lib/tiptap-extensions/indent';
 import TextAlign from '@tiptap/extension-text-align';
-import Underline from '@tiptap/extension-underline';
 import Image from '@tiptap/extension-image';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ShareModal from '../Components/ShareModal';
 import CommentList from '../Components/Comments/CommentList';
-import MenuBar from '../Components/MenuBar'; // Import the MenuBar component
+import MenuBar from '../Components/MenuBar';
 import VersionsSidebar from '../Components/VersionsSidebar';
-import SignatureModal from '../Components/SignatureModal'; // Import SignatureModal
+import SignatureModal from '../Components/SignatureModal';
 
-// Helper function to convert Markdown to HTML using a headless Tiptap editor
+// Helper to convert markdown to HTML using a temporary editor
 const convertMarkdownToHtml = (markdownContent) => {
   if (!markdownContent) return '';
   const tempEditor = new Editor({
-    extensions: [
-      StarterKit,
-      Markdown,
-      Image.configure({ inline: true }),
-      Indent,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Underline,
-    ],
+    extensions: [StarterKit, Markdown, Image.configure({ inline: true }), Indent, TextAlign.configure({ types: ['heading', 'paragraph'] })],
   });
   tempEditor.commands.setContent(markdownContent, false, { contentType: 'markdown' });
   const html = tempEditor.getHTML();
@@ -43,64 +51,50 @@ const convertMarkdownToHtml = (markdownContent) => {
   return html;
 };
 
-
 const DocumentCreation = () => {
   const { id: mongoConversationId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const versionToLoad = queryParams.get('version');
-  
+
+  // State
   const [messages, setMessages] = useState([]);
   const [title, setTitle] = useState('');
   const [chatMessage, setChatMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [finalDocument, setFinalDocument] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-
-  const chatContainerRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const [isVersionsSidebarOpen, setIsVersionsSidebarOpen] = useState(false);
   const [currentVersion, setCurrentVersion] = useState(null);
-  const [originalDocumentContent, setOriginalDocumentContent] = useState(''); // New state to track original content
-  const [isTitleEditing, setIsTitleEditing] = useState(false); // New state for title editing
-  const [tempTitle, setTempTitle] = useState(''); // New state for temporary title during editing
-  const [commentsSidebarOpen, setCommentsSidebarOpen] = useState(false); // State for comments sidebar
+  const [originalDocumentContent, setOriginalDocumentContent] = useState('');
+  const [isTitleEditing, setIsTitleEditing] = useState(false);
+  const [tempTitle, setTempTitle] = useState('');
+  const [commentsSidebarOpen, setCommentsSidebarOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false); // State for SignatureModal
-  const [documentSharedWithUsers, setDocumentSharedWithUsers] = useState([]); // New state for shared users
+  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+  const [documentSharedWithUsers, setDocumentSharedWithUsers] = useState([]);
 
+  const documentRef = useRef(null);
+  const ws = useRef(null);
+  const chatContainerRef = useRef(null);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
-  const documentRef = useRef(null); // Ref for the document area
-  const [isFullScreen, setIsFullScreen] = useState(false); // State for full screen mode
-
+  // Fullscreen handling
   const toggleFullScreen = () => {
     if (!documentRef.current) return;
-
     if (!document.fullscreenElement) {
-      documentRef.current.requestFullscreen().then(() => {
-        setIsFullScreen(true);
-      }).catch(err => {
-        console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
-      });
+      documentRef.current.requestFullscreen().then(() => setIsFullScreen(true)).catch((err) => console.error('Fullscreen error:', err));
     } else {
-      document.exitFullscreen().then(() => {
-        setIsFullScreen(false);
-      }).catch(err => {
-        console.error(`Error attempting to exit full-screen mode: ${err.message} (${err.name})`);
-      });
+      document.exitFullscreen().then(() => setIsFullScreen(false)).catch((err) => console.error('Exit fullscreen error:', err));
     }
   };
 
   useEffect(() => {
-    const handleFullScreenChange = () => {
-      setIsFullScreen(!!document.fullscreenElement);
-    };
-
+    const handleFullScreenChange = () => setIsFullScreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handleFullScreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullScreenChange);
-    };
+    return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
   }, []);
 
   const handleShareDocument = async () => {
@@ -111,238 +105,172 @@ const DocumentCreation = () => {
     setIsShareModalOpen(true);
   };
 
+  // Auto‑scroll chat
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
+  // Resize sidebar for large screens
   useEffect(() => {
-    const handleResize = () => {
-      // Keep sidebar open by default on large screens
-      setSidebarOpen(window.innerWidth >= 1024); 
-    };
-
+    const handleResize = () => setSidebarOpen(window.innerWidth >= 1024);
     window.addEventListener('resize', handleResize);
-    handleResize(); 
+    handleResize();
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const ws = useRef(null); // WebSocket instance
-
+  // Tiptap editor instance
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Markdown,
-      Image.configure({ inline: true }),
-      Indent,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Underline,
-    ],
+    extensions: [StarterKit, Markdown, Image.configure({ inline: true }), Indent, TextAlign.configure({ types: ['heading', 'paragraph'] })],
     content: finalDocument,
     onUpdate: ({ editor }) => {
       const newContent = editor.getHTML();
       setFinalDocument(newContent);
-      // Send content update via WebSocket
       if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-        const message = JSON.stringify({
-          type: 'document_content_change',
-          content: newContent,
-        });
-        ws.current.send(message);
-        console.log('Frontend: Sent document_content_change:', message); // Debug log
+        ws.current.send(JSON.stringify({ type: 'document_content_change', content: newContent }));
       }
     },
     editorProps: {
-      attributes: {
-        class: 'markdown-preview p-8 bg-card/60 border border-border/10 rounded-b-2xl backdrop-blur-xl text-foreground overflow-hidden',
-      },
+      attributes: { class: 'markdown-preview p-8 bg-card/60 border border-border/10 rounded-b-2xl backdrop-blur-xl text-foreground overflow-hidden' },
     },
   });
 
-  // WebSocket connection and message handling
+  // WebSocket connection
   useEffect(() => {
     if (!mongoConversationId) return;
-
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Explicitly connect to port 8000 where Daphne is running
     const accessToken = localStorage.getItem('access_token');
-    let wsUrl = `${protocol}//${window.location.hostname}:8000/ws/document/${mongoConversationId}/`;
-    if (accessToken) {
-      wsUrl += `?token=${accessToken}`;
-    }
+    const wsUrl = `${protocol}//${window.location.hostname}:8000/ws/document/${mongoConversationId}/${accessToken ? `?token=${accessToken}` : ''}`;
     const newWs = new WebSocket(wsUrl);
     ws.current = newWs;
-
-    newWs.onopen = () => {
-      console.log('WebSocket connected');
-    };
-
     newWs.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      console.log('Frontend: Received WebSocket message:', data); // Debug log
-      if (data.type === 'document_content_change') {
-        // Update finalDocument state, let the useEffect handle editor update
-        setFinalDocument(data.content);
-        console.log('Frontend: finalDocument state updated from WebSocket.'); // Debug log
-      } else if (data.type === 'new_comment') {
-        // Handle new comment, e.g., refresh comments list
-        toast.success('New comment added!');
-        // You might want to trigger a re-fetch of comments or update the state directly
+      if (data.type === 'chat_stream') {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.sender === 'bot') {
+            return [...prev.slice(0, -1), { ...last, text: last.text + data.chunk }];
+          }
+          return [...prev, { sender: 'bot', text: data.chunk }];
+        });
+      } else if (data.type === 'chat_complete') {
+        setIsGenerating(false);
+        if (data.updated_document_content) setFinalDocument(data.updated_document_content);
+      } else if (data.type === 'document_content_change') {
+        if (data.content !== finalDocument) setFinalDocument(data.content);
       }
     };
+    newWs.onerror = (error) => console.error('WebSocket error:', error);
+    return () => newWs.close();
+  }, [mongoConversationId, editor, finalDocument]);
 
-    newWs.onclose = () => {
-      console.log('WebSocket disconnected');
-    };
-
-    newWs.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    return () => {
-      newWs.close();
-    };
-  }, [mongoConversationId, editor]); // Reconnect if document ID or editor instance changes
-
+  // Fetch conversation / load document versions
   const fetchConversation = useCallback(async (idToFetch) => {
-    if (idToFetch) {
-      try {
-        const convResponse = await axios.get(`/api/documents/conversations/${idToFetch}/`);
-        const conversation = convResponse.data;
-        setTitle(conversation.title || '');
-        setMessages(conversation.messages || []);
-                  setDocumentSharedWithUsers(conversation.shared_with_users || []); // Set shared users
-                
-                if (conversation.document_versions && conversation.document_versions.length > 0) {
-                  let contentToLoad = '';
-                  let versionToSet = null;
-                  if (versionToLoad) {
-                    const specificVersion = conversation.document_versions.find(v => v.version_number === parseInt(versionToLoad));
-                    if (specificVersion) {
-                      contentToLoad = specificVersion.content;
-                      versionToSet = specificVersion.version_number;
-                    } else {
-                      toast.error(`Version ${versionToLoad} not found.`);
-                      const latestVersion = conversation.document_versions[conversation.document_versions.length - 1];
-                      contentToLoad = latestVersion.content;
-                      versionToSet = latestVersion.version_number;
-                    }
-                  } else {
-                    const latestVersion = conversation.document_versions[conversation.document_versions.length - 1];
-                    contentToLoad = latestVersion.content;
-                    versionToSet = latestVersion.version_number;
-                  }
-                  const htmlContent = convertMarkdownToHtml(contentToLoad); // Convert Markdown to HTML
-                  setFinalDocument(htmlContent);
-                  setCurrentVersion(versionToSet);
-                  setOriginalDocumentContent(htmlContent); // Set original content here
-                } else {
-                  setFinalDocument('');
-                  setCurrentVersion(null);
-                  setOriginalDocumentContent(''); // Set original content here
-                }
-              } catch (error) {
-                console.error('Error fetching conversation:', error);
-                if (error.response && error.response.status === 404) {
-                  toast.error('Document not found. Redirecting to My Documents.');
-                  navigate('/my-documents'); // Navigate to a safe page
-                } else {
-                  toast.error('Could not load conversation.');
-                }
-              }
-            } else {
-              setTitle('');
-              setMessages([]);
-              setFinalDocument('');
-              setCurrentVersion(null);
-              setOriginalDocumentContent(''); // Set original content here
-              setDocumentSharedWithUsers([]); // Clear shared users for new document
-            }
-          }, [versionToLoad, navigate]); // Add navigate to dependency array
-  const handleSelectVersion = async (versionNumber) => {
+    if (!idToFetch) {
+      setTitle('');
+      setMessages([]);
+      setFinalDocument('');
+      setCurrentVersion(null);
+      setOriginalDocumentContent('');
+      setDocumentSharedWithUsers([]);
+      return;
+    }
     try {
-      const response = await axios.get(`/api/documents/conversations/${mongoConversationId}/`);
-      const conversation = response.data;
-      const specificVersion = conversation.document_versions.find(v => v.version_number === versionNumber);
-      if (specificVersion) {
-        setFinalDocument(specificVersion.content);
-        setCurrentVersion(versionNumber);
-        toast.success(`Loaded version ${versionNumber}`);
-        setIsVersionsSidebarOpen(false);
+      const { data: conversation } = await axios.get(`/api/documents/conversations/${idToFetch}/`);
+      setTitle(conversation.title || '');
+      setMessages(conversation.messages || []);
+      setDocumentSharedWithUsers(conversation.shared_with_users || []);
+      if (conversation.document_versions && conversation.document_versions.length > 0) {
+        let contentToLoad = '';
+        let versionToSet = null;
+        if (versionToLoad) {
+          const specific = conversation.document_versions.find((v) => v.version_number === parseInt(versionToLoad));
+          if (specific) {
+            contentToLoad = specific.content;
+            versionToSet = specific.version_number;
+          } else {
+            toast.error(`Version ${versionToLoad} not found.`);
+            const latest = conversation.document_versions[conversation.document_versions.length - 1];
+            contentToLoad = latest.content;
+            versionToSet = latest.version_number;
+          }
+        } else {
+          const latest = conversation.document_versions[conversation.document_versions.length - 1];
+          contentToLoad = latest.content;
+          versionToSet = latest.version_number;
+        }
+        const html = convertMarkdownToHtml(contentToLoad);
+        setFinalDocument(html);
+        setCurrentVersion(versionToSet);
+        setOriginalDocumentContent(html);
       } else {
-        toast.error(`Version ${versionNumber} not found.`);
+        setFinalDocument('');
+        setCurrentVersion(null);
+        setOriginalDocumentContent('');
       }
     } catch (error) {
-      console.error('Error fetching version:', error);
-      toast.error('Could not load version.');
+      console.error('Error fetching conversation:', error);
+      if (error.response && error.response.status === 404) {
+        toast.error('Document not found. Redirecting to My Documents.');
+        navigate('/my-documents');
+      } else {
+        toast.error('Could not load conversation.');
+      }
     }
-  };
+  }, [versionToLoad, navigate]);
 
+  // Load on mount / id change
+  useEffect(() => {
+    fetchConversation(mongoConversationId);
+  }, [mongoConversationId, versionToLoad, fetchConversation]);
+
+  // Keep editor content in sync when finalDocument changes (e.g., version load)
   useEffect(() => {
     if (editor) {
       editor.chain().setContent(finalDocument, false).setMeta('addToHistory', false).run();
     }
   }, [finalDocument, editor]);
 
-  useEffect(() => {
-    fetchConversation(mongoConversationId);
-  }, [mongoConversationId, versionToLoad, fetchConversation]);
-
+  // Save conversation (create or update)
   const handleSaveConversation = useCallback(async () => {
     if (!title.trim()) {
       toast.error('Please provide a title for the document.');
       return;
     }
-
     if (finalDocument === originalDocumentContent && mongoConversationId) {
       toast('No changes made to save.', { icon: 'ℹ️' });
       return;
     }
-
-    const conversationPayload = {
-      title: title,
-      messages: messages,
-      new_document_content: finalDocument
-    };
-
+    const payload = { title, messages, new_document_content: finalDocument };
     try {
-      let idToUseForFetch = mongoConversationId;
-
+      let idToUse = mongoConversationId;
       if (!mongoConversationId) {
-                const convResponse = await axios.post('/api/documents/conversations/', {
-                    title: title,
-                    messages: messages,
-                    initial_document_content: finalDocument
-                });        idToUseForFetch = convResponse.data.id;
-        navigate(`/document-creation/${idToUseForFetch}`, { replace: true });
+        const { data } = await axios.post('/api/documents/conversations/', { title, messages, initial_document_content: finalDocument });
+        idToUse = data.id;
+        navigate(`/document-creation/${idToUse}`, { replace: true });
         toast.success('New Document created and saved as Version 0!');
       } else {
-        await axios.put(`/api/documents/conversations/${mongoConversationId}/`, conversationPayload);
+        await axios.put(`/api/documents/conversations/${mongoConversationId}/`, payload);
         toast.success('Document updated and new version saved!');
       }
-      await fetchConversation(idToUseForFetch);
-      setOriginalDocumentContent(finalDocument); // Update original content after successful save
+      await fetchConversation(idToUse);
+      setOriginalDocumentContent(finalDocument);
     } catch (error) {
-      console.error('Error saving document/conversation:', error);
-      toast.error(`Failed to save document or conversation: ${error.message}`);
+      console.error('Error saving document:', error);
+      toast.error(`Failed to save document: ${error.message}`);
     }
   }, [title, finalDocument, originalDocumentContent, mongoConversationId, messages, fetchConversation, navigate]);
 
-  // Debounced save effect
+  // Debounced auto‑save
   useEffect(() => {
     if (!mongoConversationId || !editor) return;
-
     const handler = setTimeout(() => {
-      // Only save if there are actual changes and the editor is ready
       if (finalDocument !== originalDocumentContent && editor.isReady) {
         handleSaveConversation();
       }
-    }, 2000); // Save after 2 seconds of inactivity
-
-    return () => {
-      clearTimeout(handler);
-    };
+    }, 2000);
+    return () => clearTimeout(handler);
   }, [finalDocument, mongoConversationId, editor, originalDocumentContent, handleSaveConversation]);
 
   const handleDeleteVersion = async (convId, versionNumber) => {
@@ -350,30 +278,16 @@ const DocumentCreation = () => {
       toast.error('Missing conversation ID or version number for deletion.');
       return;
     }
-
     try {
-      // Fetch conversation to check version count
-      const convResponse = await axios.get(`/api/documents/conversations/${convId}/`);
-      const conversation = convResponse.data;
-
-      if (conversation.document_versions && conversation.document_versions.length === 1) {
-        const onlyVersion = conversation.document_versions[0];
-        if (onlyVersion.version_number === versionNumber) {
-          const confirmDelete = window.confirm(
-            'This is the only version of the document. Deleting it will delete the entire document. Are you sure you want to proceed?'
-          );
-          if (!confirmDelete) {
-            toast('Deletion cancelled.', { icon: 'ℹ️' });
-            return;
-          }
-        }
+      const { data: conv } = await axios.get(`/api/documents/conversations/${convId}/`);
+      if (conv.document_versions.length === 1 && conv.document_versions[0].version_number === versionNumber) {
+        if (!window.confirm('Deleting the only version will delete the document. Continue?')) return;
       }
-
       await axios.delete(`/api/documents/conversations/${convId}/versions/${versionNumber}/`);
-      toast.success(`Version ${versionNumber} deleted successfully!`);
-      await fetchConversation(convId); // Re-fetch conversation to update versions list
+      toast.success(`Version ${versionNumber} deleted.`);
+      await fetchConversation(convId);
     } catch (error) {
-      console.error('Error deleting version:', error);
+      console.error('Delete version error:', error);
       toast.error(error.response?.data?.error || 'Failed to delete version.');
     }
   };
@@ -384,105 +298,59 @@ const DocumentCreation = () => {
       return;
     }
     try {
-      const response = await axios.get(`api/utils/conversations/${mongoConversationId}/download-latest-pdf/`, {
-        responseType: 'blob',
-      });
-      saveAs(response.data, `${title || 'legal_document'}.pdf`);
+      const { data } = await axios.get(`api/utils/conversations/${mongoConversationId}/download-latest-pdf/`, { responseType: 'blob' });
+      saveAs(data, `${title || 'legal_document'}.pdf`);
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      console.error('PDF download error:', error);
       toast.error(`Failed to download PDF: ${error.message}`);
     }
   };
 
-  const handleKeyPress = (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
+  const handleSendMessage = () => {
+    if (!chatMessage.trim() || !ws.current) return;
+    const newMsg = { sender: 'user', text: chatMessage };
+    setMessages((prev) => [...prev, newMsg]);
+    ws.current.send(JSON.stringify({ type: 'chat_message', message: chatMessage, document_content: finalDocument }));
+    setChatMessage('');
+    setIsGenerating(true);
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  const handleSelectVersion = (version) => {
+    const params = new URLSearchParams(location.search);
+    params.set('version', version);
+    navigate(`?${params.toString()}`, { replace: true });
+    setIsVersionsSidebarOpen(false);
   };
 
   const handleEditTitleClick = () => {
     setTempTitle(title);
     setIsTitleEditing(true);
   };
-
-  const handleSaveTitle = async () => {
-    if (!tempTitle.trim()) {
-      toast.error('Title cannot be empty.');
-      return;
-    }
-    if (tempTitle === title) {
-      setIsTitleEditing(false);
-      return;
-    }
-    try {
-      await axios.put(`/api/documents/conversations/${mongoConversationId}/`, { title: tempTitle });
-      setTitle(tempTitle);
-      toast.success('Title updated successfully!');
-      setIsTitleEditing(false);
-    } catch (error) {
-      console.error('Error updating title:', error);
-      toast.error('Failed to update title.');
-    }
+  const handleSaveTitle = () => {
+    setTitle(tempTitle);
+    setIsTitleEditing(false);
   };
-
   const handleCancelTitleEdit = () => {
     setIsTitleEditing(false);
-    setTempTitle(title); // Revert to original title
+    setTempTitle('');
   };
 
-  const handleSendMessage = async () => {
-    if (!chatMessage.trim() || isGenerating) return;
-
-    setIsGenerating(true);
-    const userMessage = { sender: 'user', text: chatMessage };
-    setMessages((prevMessages) => [...prevMessages, userMessage]);
-    setChatMessage('');
-
-    try {
-      const payload = {
-        message: chatMessage,
-        document_content: finalDocument, // Send current document content as context
-      };
-
-      let response;
-      if (mongoConversationId) {
-        // If conversation exists, update it
-        response = await axios.post(`/api/documents/conversations/${mongoConversationId}/chat/`, payload);
-      } else {
-        // If no conversation, create a new one with the initial message
-        response = await axios.post('/api/documents/conversations/chat/', payload);
-        const newConversationId = response.data.conversation_id;
-        navigate(`/document-creation/${newConversationId}`, { replace: true });
-      }
-
-      const botMessage = { sender: 'bot', text: response.data.response };
-      setMessages((prevMessages) => [...prevMessages, botMessage]);
-      const htmlUpdatedDocumentContent = convertMarkdownToHtml(response.data.updated_document_content);
-      setFinalDocument(htmlUpdatedDocumentContent);
-      toast.success('AI response received!');
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast.error('Failed to get AI response.');
-      setMessages((prevMessages) => [...prevMessages, { sender: 'bot', text: 'Error: Could not get a response from the AI.' }]);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const hasDocument = !!finalDocument;
-
-  // Initial view when no document
-  if (!hasDocument) {
+  // Render creation UI when no conversation ID yet
+  if (!mongoConversationId) {
     return (
       <div className="flex relative h-screen bg-background overflow-hidden">
         <div className="fixed inset-0 opacity-30 pointer-events-none">
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary rounded-full mix-blend-multiply filter blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary rounded-full mix-blend-multiply filter blur-3xl animate-pulse delay-1000"></div>
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary rounded-full mix-blend-multiply filter blur-3xl animate-pulse" />
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary rounded-full mix-blend-multiply filter blur-3xl animate-pulse delay-1000" />
         </div>
-
         <div className="w-full relative z-10 flex flex-col h-screen overflow-hidden">
-          {/* Big Navbar */}
           <div className="px-8 py-6 bg-gradient-to-r from-card/80 to-card/80 backdrop-blur-xl border-b border-border/10 flex-shrink-0">
             <div className="max-w-7xl mx-auto">
               <div className="flex items-center justify-between mb-6">
@@ -493,7 +361,6 @@ const DocumentCreation = () => {
                   <h1 className="text-3xl font-bold text-foreground">Legal Document Assistant</h1>
                 </div>
               </div>
-
               <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
                 <div className="flex-1 relative">
                   <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -515,8 +382,7 @@ const DocumentCreation = () => {
               </div>
             </div>
           </div>
-
-          {/* Chat Interface */}
+          {/* Placeholder for chat interface when creating a new doc */}
           <div className="flex-1 p-8 flex items-center justify-center overflow-hidden">
             <Card className="w-full bg-gradient-to-br from-card/60 to-card/60 backdrop-blur-xl border border-border/10 shadow-2xl rounded-2xl overflow-hidden h-full flex flex-col">
               <CardHeader className="pb-6 bg-gradient-to-r from-primary/10 to-secondary/10 border-b border-border/10 flex-shrink-0">
@@ -532,19 +398,15 @@ const DocumentCreation = () => {
               </CardHeader>
               <CardContent className="p-8 flex-1 flex flex-col overflow-hidden">
                 <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 custom-scrollbar">
-                  {messages.filter(msg => msg.type !== 'document_context').map((msg, index) => (
-                    <div key={index} className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
+                  {messages.map((msg, idx) => (
+                    <div key={idx} className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
                       {msg.sender === 'bot' && (
                         <div className="w-6 h-6 flex-shrink-0 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center">
                           <Bot className="w-3 h-3 text-foreground" />
                         </div>
                       )}
-                      <div className={`px-3 py-2 rounded-lg max-w-xs text-xs leading-relaxed ${
-                        msg.sender === 'user'
-                          ? 'bg-primary text-foreground'
-                          : 'bg-card text-foreground border border-border/10'
-                      }`}>
-                        <p style={{whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{msg.text}</p>
+                      <div className={`px-3 py-2 rounded-lg max-w-xs text-xs leading-relaxed ${msg.sender === 'user' ? 'bg-primary text-foreground' : 'bg-card text-foreground border border-border/10'}`}>
+                        <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</p>
                       </div>
                       {msg.sender === 'user' && (
                         <div className="w-6 h-6 flex-shrink-0 rounded-full bg-muted flex items-center justify-center">
@@ -560,15 +422,14 @@ const DocumentCreation = () => {
                       </div>
                       <div className="px-3 py-2 rounded-lg bg-card border border-border/10">
                         <div className="flex gap-1">
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                         </div>
                       </div>
                     </div>
                   )}
                 </div>
-
                 <div className="flex gap-4 flex-shrink-0 mt-4">
                   <Input
                     type="text"
@@ -596,51 +457,47 @@ const DocumentCreation = () => {
     );
   }
 
-  // Document generated view with 3-column layout
+  // Main document editor view
   return (
-    <div className="flex relative h-full bg-background overflow-hidden overflow-x-hidden">
+    <div className="flex relative h-[calc(100vh-var(--navbar-height))] bg-background overflow-hidden">
       <div className="fixed inset-0 opacity-20 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary rounded-full mix-blend-multiply filter blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary rounded-full mix-blend-multiply filter blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary rounded-full mix-blend-multiply filter blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary rounded-full mix-blend-multiply filter blur-3xl animate-pulse delay-1000" />
       </div>
-
-      {/* Left Sidebar - Chat */}
-          <div className={`
-             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
-             md:w-64 lg:w-80 md:relative md:translate-x-0 
-             transition-all duration-300 ease-in-out 
-             fixed top-0 bottom-0 left-0 z-[51] lg:z-10 
-             bg-card border-r border-border/50 
-             flex flex-col overflow-hidden h-full w-3/4 max-w-xs
-             lg:flex-shrink-0
-          `} style={{ height: 'calc(100vh - var(--navbar-height))', top: 'var(--navbar-height)' }}>        <div className="p-4 border-b border-border/10">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <MessageCircle className="w-5 h-5 text-primary" />
-                          <span className="text-foreground font-semibold text-sm">Chat History</span>
-                        </div>
-                        <button
-                          onClick={() => setSidebarOpen(false)}
-                          className="p-1.5 hover:bg-muted rounded-lg transition-colors lg:hidden"
-                        >
-                          <X className="w-4 h-4 text-muted-foreground" />
-                        </button>          </div>
+      {/* Left Sidebar - Chat History */}
+      <div
+        className={`
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:w-64 lg:w-80 md:relative md:translate-x-0
+          transition-all duration-300 ease-in-out
+          fixed top-[var(--navbar-height)] bottom-0 left-0 z-[70] lg:relative lg:top-0 lg:z-10
+          bg-card border-r border-border/50
+          flex flex-col overflow-hidden h-full w-3/4 max-w-xs
+          lg:flex-shrink-0
+        `}
+      >
+        <div className="p-4 border-b border-border/10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-primary" />
+              <span className="text-foreground font-semibold text-sm">Chat History</span>
+            </div>
+            <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-muted rounded-lg transition-colors lg:hidden">
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
         </div>
-
         <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 custom-scrollbar">
-          {messages.filter(msg => msg.type !== 'document_context').map((msg, index) => (
-            <div key={index} className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
+          {messages.map((msg, idx) => (
+            <div key={idx} className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
               {msg.sender === 'bot' && (
                 <div className="w-6 h-6 flex-shrink-0 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center">
                   <Bot className="w-3 h-3 text-foreground" />
                 </div>
               )}
-              <div className={`px-3 py-2 rounded-lg max-w-xs text-xs leading-relaxed ${
-                msg.sender === 'user'
-                  ? 'bg-primary text-foreground'
-                  : 'bg-card text-foreground border border-border/10'
-              }`}>
-                                      <p style={{whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{msg.text}</p>              </div>
+              <div className={`px-3 py-2 rounded-lg max-w-xs text-xs leading-relaxed ${msg.sender === 'user' ? 'bg-primary text-foreground' : 'bg-card text-foreground border border-border/10'}`}>
+                <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</p>
+              </div>
               {msg.sender === 'user' && (
                 <div className="w-6 h-6 flex-shrink-0 rounded-full bg-muted flex items-center justify-center">
                   <User className="w-3 h-3 text-muted-foreground" />
@@ -655,15 +512,14 @@ const DocumentCreation = () => {
               </div>
               <div className="px-3 py-2 rounded-lg bg-card border border-border/10">
                 <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                 </div>
               </div>
             </div>
           )}
         </div>
-
         <div className="p-4 border-t border-border/10 space-y-2">
           <div className="flex gap-2">
             <Input
@@ -687,20 +543,14 @@ const DocumentCreation = () => {
       </div>
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col relative z-10 h-full overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-80' : ''}`}>
+      <div className="flex-1 flex flex-col relative z-10 h-full overflow-hidden">
         {/* Top Bar */}
         <div className="px-6 py-4 bg-gradient-to-r from-card/80 to-card/80 backdrop-blur-xl border-b border-border/10 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-4 min-w-0 flex-1">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-foreground/10 rounded-lg transition-all text-muted-foreground flex-shrink-0 lg:hidden"
-            >
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-foreground/10 rounded-lg transition-all text-muted-foreground flex-shrink-0 lg:hidden">
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-foreground/10 rounded-lg transition-all text-muted-foreground flex-shrink-0 hidden lg:block"
-            >
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-foreground/10 rounded-lg transition-all text-muted-foreground flex-shrink-0 hidden lg:block">
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
             <div className="min-w-0 flex-1 flex items-center gap-2">
@@ -717,7 +567,7 @@ const DocumentCreation = () => {
               ) : (
                 <h2 className="text-xl lg:text-2xl font-bold text-foreground truncate">{title || 'Your Document'}</h2>
               )}
-              {mongoConversationId && ( // Only show edit/save/cancel if document exists
+              {mongoConversationId && (
                 isTitleEditing ? (
                   <>
                     <Button size="icon" variant="ghost" onClick={handleSaveTitle} title="Save Title">
@@ -735,14 +585,8 @@ const DocumentCreation = () => {
               )}
             </div>
           </div>
-
           <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsEditing(!isEditing)}
-              className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm"
-            >
+            <Button variant="outline" size="sm" onClick={() => setIsEditing(!isEditing)} className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm">
               {isEditing ? (
                 <>
                   <Eye className="w-4 h-4 mr-1 lg:mr-2" />
@@ -755,58 +599,24 @@ const DocumentCreation = () => {
                 </>
               )}
             </Button>
-            {mongoConversationId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setIsVersionsSidebarOpen(!isVersionsSidebarOpen);
-                  setCommentsSidebarOpen(false);
-                }}
-                className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm"
-              >
-                <History className="w-4 h-4 mr-1 lg:mr-2" />
-                <span className="hidden lg:inline">Versions</span>
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleFullScreen}
-              className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm"
-              title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
-            >
-              <Maximize className="w-4 h-4 mr-1 lg:mr-2" />
-              <span className="hidden lg:inline">{isFullScreen ? "Exit Fullscreen" : "Fullscreen"}</span>
+            <Button variant="outline" size="sm" onClick={() => { setIsVersionsSidebarOpen(!isVersionsSidebarOpen); setCommentsSidebarOpen(false); }} className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm">
+              <History className="w-4 h-4 mr-1 lg:mr-2" />
+              <span className="hidden lg:inline">Versions</span>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleShareDocument}
-              className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm"
-              title="Share Document"
-            >
+            <Button variant="outline" size="sm" onClick={toggleFullScreen} className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm" title={isFullScreen ? 'Exit Fullscreen' : 'Fullscreen'}>
+              <Maximize className="w-4 h-4 mr-1 lg:mr-2" />
+              <span className="hidden lg:inline">{isFullScreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleShareDocument} className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm" title="Share Document">
               <Share2 className="w-4 h-4 mr-1 lg:mr-2" />
               <span className="hidden lg:inline">Share</span>
             </Button>
-            {mongoConversationId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setCommentsSidebarOpen(!commentsSidebarOpen);
-                  setIsVersionsSidebarOpen(false);
-                }}
-                className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm"
-                title="View Comments"
-              >
-                <MessageCircle className="w-4 h-4 mr-1 lg:mr-2" />
-                <span className="hidden lg:inline">Comments</span>
-              </Button>
-            )}
+            <Button variant="outline" size="sm" onClick={() => { setCommentsSidebarOpen(!commentsSidebarOpen); setIsVersionsSidebarOpen(false); }} className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all text-xs lg:text-sm" title="View Comments">
+              <MessageCircle className="w-4 h-4 mr-1 lg:mr-2" />
+              <span className="hidden lg:inline">Comments</span>
+            </Button>
           </div>
         </div>
-
         {/* Document Area */}
         <div className="flex-1 overflow-hidden flex flex-col p-6 bg-card/80 rounded-xl shadow-inner">
           {isEditing ? (
@@ -818,47 +628,29 @@ const DocumentCreation = () => {
             </div>
           ) : (
             <div ref={documentRef} className="flex-1 overflow-y-auto custom-scrollbar bg-card/60 border border-border/10 rounded-xl p-8 markdown-preview shadow-2xl text-foreground">
-                {console.log("Previewing finalDocument:", finalDocument)}
-                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(finalDocument) }} />
-              </div>
+              <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(finalDocument) }} />
+            </div>
           )}
-
-          {/* Action Buttons at Bottom */}
+          {/* Bottom actions */}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3 pt-6 pb-6 border-t border-border/10 bg-card/80 rounded-b-xl">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsSignatureModalOpen(true)} // Open SignatureModal
-              className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all"
-            >
+            <Button variant="outline" size="sm" onClick={() => setIsSignatureModalOpen(true)} className="border-border/20 bg-card/40 hover:bg-card/60 hover:border-border/30 text-muted-foreground rounded-lg backdrop-blur-sm transition-all">
               <PenTool className="w-4 h-4 mr-2" />
               Add Signature
             </Button>
-            <Button
-              onClick={handleDownloadPdf}
-              className="bg-gradient-to-r from-accent to-accent text-foreground rounded-lg shadow-lg shadow-accent/30 transition-all"
-            >
+            <Button onClick={handleDownloadPdf} className="bg-gradient-to-r from-accent to-accent text-foreground rounded-lg shadow-lg shadow-accent/30 transition-all">
               <Download className="w-4 h-4 mr-2" />
               Download PDF
             </Button>
-            <Button
-              onClick={handleSaveConversation}
-              className="bg-gradient-to-r from-primary to-secondary text-foreground rounded-lg shadow-lg shadow-primary/30 transition-all"
-            >
+            <Button onClick={handleSaveConversation} className="bg-gradient-to-r from-primary to-secondary text-foreground rounded-lg shadow-lg shadow-primary/30 transition-all">
               <Save className="w-4 h-4 mr-2" />
               Save Version
             </Button>
           </div>
-
-
         </div>
       </div>
 
       {/* Right Sidebar - Comments */}
-      <div className={`
-        bg-card border-l border-border/10 
-        flex flex-col overflow-hidden h-full
-      `}>
+      <div className="bg-card border-l border-border/10 flex flex-col overflow-hidden h-full">
         {commentsSidebarOpen && mongoConversationId && (
           <div className="flex flex-col h-full">
             <div className="p-4 border-b border-border/10 flex items-center justify-between">
@@ -866,10 +658,7 @@ const DocumentCreation = () => {
                 <MessageCircle className="w-5 h-5 text-primary" />
                 <span className="text-foreground font-semibold text-sm">Comments</span>
               </div>
-              <button
-                onClick={() => setCommentsSidebarOpen(false)}
-                className="p-1.5 hover:bg-muted rounded-lg transition-colors"
-              >
+              <button onClick={() => setCommentsSidebarOpen(false)} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
@@ -881,32 +670,30 @@ const DocumentCreation = () => {
       </div>
 
       {/* Right Sidebar - Versions */}
-      <div className={`
-        ${isVersionsSidebarOpen ? 'translate-x-0' : 'translate-x-full'} 
-        w-3/4 max-w-xs md:w-64 lg:w-80
-        transition-all duration-300 ease-in-out 
-        fixed top-0 bottom-0 right-0 z-[51] 
-        bg-card border-l border-border/10 
-        flex flex-col overflow-hidden h-full
-      `} style={{ height: 'calc(100vh - var(--navbar-height))', top: 'var(--navbar-height)' }}>
+      <div
+        className={`
+          ${isVersionsSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
+          w-3/4 max-w-xs md:w-64 lg:w-80
+          transition-all duration-300 ease-in-out
+          fixed top-0 bottom-0 right-0 z-[51]
+          bg-card border-l border-border/10
+          flex flex-col overflow-hidden h-full
+        `}
+        style={{ height: 'calc(100vh - var(--navbar-height))', top: 'var(--navbar-height)' }}
+      >
         <VersionsSidebar
           conversationId={mongoConversationId}
           onSelectVersion={handleSelectVersion}
           onClose={() => setIsVersionsSidebarOpen(false)}
           currentVersion={currentVersion}
-          onDeleteVersion={handleDeleteVersion} // Pass the delete function
+          onDeleteVersion={handleDeleteVersion}
         />
       </div>
 
+      {/* Modals */}
       {isShareModalOpen && (
-        <ShareModal
-          documentId={mongoConversationId}
-          documentTitle={title}
-          onClose={() => setIsShareModalOpen(false)}
-          initialSharedWithUsers={documentSharedWithUsers} // Pass shared users
-        />
+        <ShareModal documentId={mongoConversationId} documentTitle={title} onClose={() => setIsShareModalOpen(false)} initialSharedWithUsers={documentSharedWithUsers} />
       )}
-
       {isSignatureModalOpen && (
         <SignatureModal
           onClose={() => setIsSignatureModalOpen(false)}
@@ -914,52 +701,11 @@ const DocumentCreation = () => {
             if (editor) {
               editor.commands.setContent(editor.getHTML() + `\n\n---\n\n${signatureMarkdown}\n\n**${partyName}**`);
               setFinalDocument(editor.getHTML());
-              // Automatically save the document after adding a signature
               await handleSaveConversation();
             }
           }}
         />
       )}
-
-      {/* Custom Styles */}
-      <style>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .animate-fadeIn {
-          animation: fadeIn 0.5s ease-out;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 4px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(59, 130, 246, 0.5);
-          border-radius: 4px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(59, 130, 246, 0.7);
-        }
-
-        .delay-1000 {
-          animation-delay: 1s;
-        }
-      `}</style>
     </div>
   );
 };

@@ -2744,45 +2744,73 @@ def user_sessions(request):
         user = request.user
         
         if not user:
+            logger.error("User not found in request")
             return Response({
                 'error': 'User not found'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        sessions = list(DocumentSession.objects(user=user).order_by('-created_at')) # Fetch all sessions
+        logger.info(f"Fetching sessions for user: {user.email if hasattr(user, 'email') else user}")
+        
+        try:
+            # Query sessions for this user
+            sessions = list(DocumentSession.objects(user=user).order_by('-created_at'))
+            logger.info(f"Found {len(sessions)} sessions for user {user.email if hasattr(user, 'email') else user}")
+        except Exception as query_error:
+            logger.error(f"Error querying DocumentSession: {str(query_error)}")
+            return Response({
+                'error': f'Database query failed: {str(query_error)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        if not sessions:
+            # No sessions found, return empty list
+            return Response({
+                'sessions': []
+            }, status=status.HTTP_200_OK)
         
         session_ids = [session.id for session in sessions]
         
-        # Aggregate message counts for all sessions in a single query
-        # Using MongoEngine's ._collection.aggregate for direct MongoDB aggregation pipeline
-        message_counts = list(ChatMessage._collection.aggregate([
-            {'$match': {'session': {'$in': session_ids}}},
-            {'$group': {'_id': '$session', 'count': {'$sum': 1}}}
-        ]))
-        
-        # Convert list of dicts to a dict for easy lookup
-        message_counts_map = {item['_id']: item['count'] for item in message_counts}
+        try:
+            # Aggregate message counts for all sessions in a single query
+            message_counts = list(ChatMessage._collection.aggregate([
+                {'$match': {'session': {'$in': session_ids}}},
+                {'$group': {'_id': '$session', 'count': {'$sum': 1}}}
+            ]))
+            
+            # Convert list of dicts to a dict for easy lookup
+            message_counts_map = {item['_id']: item['count'] for item in message_counts}
+        except Exception as agg_error:
+            logger.error(f"Error aggregating message counts: { str(agg_error)}")
+            # Continue without message counts
+            message_counts_map = {}
         
         sessions_data = []
         for session in sessions:
-            message_count = message_counts_map.get(session.id, 0) # Get count from map, default to 0
-            sessions_data.append({
-                'id': str(session.id),
-                'summary_preview': (session.summary[:150] + '...' if len(session.summary) > 150 else session.summary) if session.summary else '',
-                'created_at': session.created_at.isoformat() if session.created_at else None,
-                'message_count': message_counts_map.get(session.id, 0),
-                'document_preview': (session.document_text[:100] + '...' if len(session.document_text) > 100 else session.document_text) if session.document_text else '',
-                'highlighted_preview': session.highlighted_preview or '',
-                'high_risk_clause_count': len(session.high_risk_clauses or []),
-                'comprehensive_summary': session.comprehensive_summary or None,
-                'document_type': session.document_type or None,
-                'document_type_confidence': session.document_type_confidence or None,
-            })
+            try:
+                message_count = message_counts_map.get(session.id, 0)
+                sessions_data.append({
+                    'id': str(session.id),
+                    'summary_preview': (session.summary[:150] + '...' if len(session.summary) > 150 else session.summary) if session.summary else '',
+                    'created_at': session.created_at.isoformat() if session.created_at else None,
+                    'message_count': message_count,
+                    'document_preview': (session.document_text[:100] + '...' if len(session.document_text) > 100 else session.document_text) if session.document_text else '',
+                    'highlighted_preview': session.highlighted_preview or '',
+                    'high_risk_clause_count': len(session.high_risk_clauses or []),
+                    'comprehensive_summary': session.comprehensive_summary or None,
+                    'document_type': session.document_type or None,
+                    'document_type_confidence': session.document_type_confidence or None,
+                })
+            except Exception as session_error:
+                logger.error(f"Error processing session {session.id}: {str(session_error)}")
+                # Skip this session and continue
+                continue
         
+        logger.info(f"Successfully prepared {len(sessions_data)} sessions data")
         return Response({
             'sessions': sessions_data
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
+        logger.error(f"Unexpected error in user_sessions: {str(e)}", exc_info=True)
         return Response({
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

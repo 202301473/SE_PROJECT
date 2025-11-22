@@ -21,6 +21,7 @@ import DocumentVersions from "./pages/DocumentVersions"; // Added this import
 import SharedDocumentView from "./pages/SharedDocumentView";
 import ChatList from "./pages/ChatList";
 import Chat from "./pages/Chat";
+import NotFound from "./pages/NotFound";
 import ParticlesComponent from "./Components/Particles";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -152,6 +153,8 @@ function AppContent() {
               </ProtectedRoute>
             )}
           />
+          {/* Catch-all route for 404 Not Found */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       {/* {shouldShowNavbar && <Footer />} */}
@@ -167,9 +170,9 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 function App() {
   return (
-  <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-    <Router>
-      <Toaster position="bottom-right" />
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <Router>
+        <Toaster position="bottom-right" />
         <AuthProvider> {/* Wrap AppContent with AuthProvider */}
           <AppContent />
         </AuthProvider>

@@ -96,17 +96,17 @@ const DocumentAnalyzer = () => {
   const handleCopySummary = () => {
     const riskSection = highRiskClauses.length
       ? ['High Risk Clauses:', ...highRiskClauses.map((clause, index) => {
-          const { score, level } = getRiskDisplay(clause);
-          const badge = score ? `${level} (${score}/5)` : level;
-          const text = clause?.clause_text || clause?.clauseText || '';
-          const rationale = clause?.rationale || clause?.reason || '';
-          const mitigation = getMitigation(clause);
-          const replacement = getReplacementClause(clause);
-          const clauseLine = text ? `${index + 1}. [${badge}] ${text}` : `${index + 1}. [${badge}]`;
-          const rationaleLine = rationale ? `${clauseLine} — ${rationale}` : clauseLine;
-          const mitigationLine = mitigation ? `${rationaleLine}\n   Mitigation: ${mitigation}` : rationaleLine;
-          return replacement ? `${mitigationLine}\n   Alternate Clause: ${replacement}` : mitigationLine;
-        })].join('\n')
+        const { score, level } = getRiskDisplay(clause);
+        const badge = score ? `${level} (${score}/5)` : level;
+        const text = clause?.clause_text || clause?.clauseText || '';
+        const rationale = clause?.rationale || clause?.reason || '';
+        const mitigation = getMitigation(clause);
+        const replacement = getReplacementClause(clause);
+        const clauseLine = text ? `${index + 1}. [${badge}] ${text}` : `${index + 1}. [${badge}]`;
+        const rationaleLine = rationale ? `${clauseLine} — ${rationale}` : clauseLine;
+        const mitigationLine = mitigation ? `${rationaleLine}\n   Mitigation: ${mitigation}` : rationaleLine;
+        return replacement ? `${mitigationLine}\n   Alternate Clause: ${replacement}` : mitigationLine;
+      })].join('\n')
       : 'High Risk Clauses: None flagged.';
 
     const copyPayload = [summary, '', riskSection].filter(Boolean).join('\n').trim();
@@ -306,7 +306,7 @@ const DocumentAnalyzer = () => {
       setChatHistory(messages);
       const sessionSummary = sessionInfo.summary ?? session.summary ?? session.summary_preview ?? '';
       setSummary(sessionSummary || '');
-      
+
       // Load comprehensive summary if available
       const sessionComprehensiveSummary = sessionInfo.comprehensive_summary ?? session.comprehensive_summary ?? null;
       if (sessionComprehensiveSummary) {
@@ -328,13 +328,13 @@ const DocumentAnalyzer = () => {
         prevSessions.map(s =>
           (s.id ?? s._id) === (session.id ?? session._id)
             ? {
-                ...s,
-                summary: sessionSummary,
-                summary_preview: sessionSummary, // Ensure summary_preview is updated
-                comprehensive_summary: sessionComprehensiveSummary,
-                document_type: sessionInfo.document_type || session.document_type || '',
-                document_type_confidence: sessionInfo.document_type_confidence || session.document_type_confidence || null,
-              }
+              ...s,
+              summary: sessionSummary,
+              summary_preview: sessionSummary, // Ensure summary_preview is updated
+              comprehensive_summary: sessionComprehensiveSummary,
+              document_type: sessionInfo.document_type || session.document_type || '',
+              document_type_confidence: sessionInfo.document_type_confidence || session.document_type_confidence || null,
+            }
             : s
         )
       );
@@ -386,13 +386,17 @@ const DocumentAnalyzer = () => {
   );
 
   return (
-    <div className="flex min-h-[calc(100vh - var(--navbar-height))] bg-background">
+    <div className="flex h-[calc(100vh-var(--navbar-height))] bg-background overflow-hidden">
       {/* Animated background effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 -left-48 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute top-1/4 -left-48 w-[500px] h-[500px] bg-primary/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
         <div
-          className="absolute bottom-1/4 -right-48 w-96 h-96 bg-secondary/10 rounded-full blur-3xl animate-pulse"
-          style={{ animationDelay: '1s' }}
+          className="absolute bottom-1/4 -right-48 w-[500px] h-[500px] bg-secondary/10 rounded-full blur-3xl animate-pulse"
+          style={{ animationDelay: '2s', animationDuration: '4s' }}
+        />
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/5 rounded-full blur-3xl animate-pulse"
+          style={{ animationDelay: '1s', animationDuration: '5s' }}
         />
       </div>
 
@@ -401,19 +405,19 @@ const DocumentAnalyzer = () => {
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
-          className="lg:hidden fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
+          className="lg:hidden fixed inset-0 bg-black/50 z-[60] transition-opacity duration-300"
         ></div>
       )}
 
       <div className={`
-        fixed left-0 z-50 transform
+        fixed left-0 top-[var(--navbar-height)] z-[70] transform
         w-3/4 max-w-xs sm:w-64 lg:w-80
         transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:relative lg:z-10 lg:flex-shrink-0
+        lg:translate-x-0 lg:relative lg:top-0 lg:z-10 lg:flex-shrink-0
         bg-card border-r border-border/50
-        flex flex-col h-[calc(100vh - var(--navbar-height))]
-      `} style={{ top: 'var(--navbar-height)' }}>
+        flex flex-col h-full
+      `}>
         {/* Only show content if sidebar is logically open or on large screens */}
         {(sidebarOpen || window.innerWidth >= 1024) && ( // Added window.innerWidth check for initial render
           <>
@@ -425,8 +429,8 @@ const DocumentAnalyzer = () => {
                   </div>
                   <h2 className="text-lg font-semibold text-foreground">History</h2>
                 </div>
-                {/* Close button for mobile, or always present if needed */}
-                <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-muted rounded-lg transition-colors lg:hidden">
+                {/* Close button - always visible on mobile for better UX */}
+                <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
                   <X className="w-5 h-5 text-muted-foreground" />
                 </button>
               </div>
@@ -444,11 +448,10 @@ const DocumentAnalyzer = () => {
                     <button
                       key={session.id ?? session._id}
                       onClick={() => openSession(session)}
-                      className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${
-                        sessionId === (session.id ?? session._id)
-                          ? 'bg-gradient-to-br from-primary/20 to-secondary/20 border-primary/50 shadow-lg shadow-primary/20'
-                          : 'bg-card/40 border-border/50 hover:bg-card/60 hover:border-border'
-                      }`}
+                      className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${sessionId === (session.id ?? session._id)
+                        ? 'bg-gradient-to-br from-primary/20 to-secondary/20 border-primary/50 shadow-lg shadow-primary/20'
+                        : 'bg-card/40 border-border/50 hover:bg-card/60 hover:border-border'
+                        }`}
                     >
                       <div className="flex items-start gap-3">
                         <FileText className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
@@ -490,15 +493,34 @@ const DocumentAnalyzer = () => {
       )}
 
       {/* Main content */}
-      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-80' : ''}`}>
-        <div className="max-w-7xl mx-auto p-6 lg:p-12 flex-1 flex flex-col w-full">
+      <div className={`flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-0' : ''}`}>
+        <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 h-full flex flex-col w-full overflow-y-auto custom-scrollbar">
           {/* Upload / Summary header */}
           {!hasAnalysis ? (
             <div className="mb-8">
+              {/* Welcome Header */}
+              <div className="mb-8 text-center animate-fade-in-up">
+                <div className="inline-flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl border border-primary/30 shadow-lg shadow-primary/10">
+                    <Sparkles className="w-8 h-8 text-primary" />
+                  </div>
+                  <h1 className="text-4xl md:text-5xl font-bold">
+                    <span className="bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">AI Document Analyzer</span>
+                  </h1>
+                </div>
+                <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                  Get instant AI-powered insights, risk analysis, and Q&A for your legal documents
+                </p>
+              </div>
+
+              {/* Upload Area */}
               <div
-                className={`relative overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-300 ${
-                  dragActive ? 'border-primary bg-primary/10 scale-[1.02]' : uploadedFile ? 'border-accent/50 bg-card/40' : 'border-border/20 hover:border-border hover:bg-card/30'
-                }`}
+                className={`relative overflow-hidden rounded-3xl border-2 border-dashed transition-all duration-300 hover:shadow-2xl hover:shadow-primary/20 ${dragActive
+                  ? 'border-primary bg-gradient-to-br from-primary/20 to-secondary/10 scale-[1.02] shadow-2xl shadow-primary/30'
+                  : uploadedFile
+                    ? 'border-accent/50 bg-card/40'
+                    : 'border-border/30 hover:border-primary/50 hover:bg-card/20'
+                  }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
@@ -514,7 +536,7 @@ const DocumentAnalyzer = () => {
                   disabled={uploading}
                 />
 
-                <div className="px-6 pts-8 sm:p-10 lg:p-12 text-center cursor-pointer">
+                <div className="p-6 sm:p-10 lg:p-12 text-center cursor-pointer">
                   {uploading ? (
                     <div className="space-y-4">
                       <div className="relative w-16 h-16 mx-auto">
@@ -537,21 +559,22 @@ const DocumentAnalyzer = () => {
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      <div className="relative w-20 h-20 mx-auto">
-                        <div className="absolute inset-0 bg-gradient-to-br from-primary to-secondary rounded-2xl opacity-20 blur-xl" />
-                        <div className="relative p-4 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl border border-primary/30">
-                          <Upload className="w-12 h-12 text-primary" />
+                    <div className="space-y-6">
+                      <div className="relative w-24 h-24 mx-auto">
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary via-accent to-secondary rounded-3xl opacity-30 blur-2xl animate-pulse" style={{ animationDuration: '3s' }} />
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary to-secondary rounded-3xl opacity-20 blur-xl" />
+                        <div className="relative p-5 bg-gradient-to-br from-primary/20 via-accent/10 to-secondary/20 rounded-3xl border-2 border-primary/40 shadow-lg shadow-primary/20">
+                          <Upload className="w-14 h-14 text-primary drop-shadow-lg" />
                         </div>
                       </div>
                       <div>
-                        <p className="text-lg font-medium text-foreground mb-2">Drop your document here</p>
-                        <p className="text-sm text-muted-foreground mb-4">or click to browse your files</p>
-                        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                          <span>Supports:</span>
-                          <span className="px-2 py-1 bg-card/50 rounded">PDF</span>
-                          <span className="px-2 py-1 bg-card/50 rounded">DOCX</span>
-                          <span className="px-2 py-1 bg-card/50 rounded">TXT</span>
+                        <p className="text-xl font-semibold text-foreground mb-2 bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">Drop your document here</p>
+                        <p className="text-base text-muted-foreground mb-6">or click to browse your files</p>
+                        <div className="flex items-center justify-center gap-3 text-sm">
+                          <span className="text-muted-foreground font-medium">Supports:</span>
+                          <span className="px-3 py-1.5 bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 text-primary rounded-lg font-medium shadow-sm">PDF</span>
+                          <span className="px-3 py-1.5 bg-gradient-to-br from-accent/10 to-accent/5 border border-accent/30 text-accent rounded-lg font-medium shadow-sm">DOCX</span>
+                          <span className="px-3 py-1.5 bg-gradient-to-br from-secondary/10 to-secondary/5 border border-secondary/30 text-secondary rounded-lg font-medium shadow-sm">TXT</span>
                         </div>
                       </div>
                     </div>
@@ -559,10 +582,48 @@ const DocumentAnalyzer = () => {
                 </div>
 
                 {error && (
-                  <div className="mt-4 p-4 bg-destructive/10 border border-destructive/30 rounded-xl">
-                    <p className="text-destructive text-sm">{error}</p>
+                  <div className="mt-6 p-4 bg-destructive/10 border-2 border-destructive/30 rounded-xl flex items-start gap-3 animate-fade-in">
+                    <ShieldAlert className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                    <p className="text-destructive text-sm font-medium">{error}</p>
                   </div>
                 )}
+              </div>
+
+              {/* Feature highlights */}
+              <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-primary/20 rounded-lg">
+                      <Bot className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-foreground mb-1">AI Analysis</h3>
+                      <p className="text-sm text-muted-foreground">Instant document summarization with key insights</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-secondary/5 to-secondary/10 border border-secondary/20 hover:border-secondary/40 transition-all duration-300 hover:shadow-lg hover:shadow-secondary/10">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-secondary/20 rounded-lg">
+                      <ShieldAlert className="w-5 h-5 text-secondary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-foreground mb-1">Risk Detection</h3>
+                      <p className="text-sm text-muted-foreground">Automatic identification of problematic clauses</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-accent/5 to-accent/10 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-accent/20 rounded-lg">
+                      <MessageCircle className="w-5 h-5 text-accent" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-foreground mb-1">Interactive Q&A</h3>
+                      <p className="text-sm text-muted-foreground">Ask questions and get instant answers</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
@@ -689,7 +750,7 @@ const DocumentAnalyzer = () => {
                             )}
                           </button>
                         </div>
-                        
+
                         {!showDetailedSummary ? (
                           <div>
                             <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
@@ -968,9 +1029,8 @@ const DocumentAnalyzer = () => {
                           </div>
                         )}
                         <div className={`max-w-[80%]`}>
-                          <div className={`rounded-2xl px-4 py-3 ${
-                            message.sender === 'User' ? 'bg-gradient-to-br from-primary to-secondary text-foreground shadow-lg shadow-primary/20' : 'bg-card/50 text-foreground border border-border/50'
-                          }`}>
+                          <div className={`rounded-2xl px-4 py-3 ${message.sender === 'User' ? 'bg-gradient-to-br from-primary to-secondary text-foreground shadow-lg shadow-primary/20' : 'bg-card/50 text-foreground border border-border/50'
+                            }`}>
                             <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.message}</p>
                           </div>
                         </div>
@@ -1017,362 +1077,367 @@ const DocumentAnalyzer = () => {
             </div>
           )}
         </div>
-      </div>
+      </div >
 
       {/* Expanded Modals */}
-      {expandedSection === 'preview' && (
-        <ExpandedModal
-          section="preview"
-          title="Document Preview"
-          onClose={() => setExpandedSection(null)}
-        >
-          {highlightedPreview ? (
-            <div
-              className="text-base leading-relaxed text-muted-foreground space-y-4"
-              dangerouslySetInnerHTML={{ __html: highlightedPreview }}
-            />
-          ) : (
-            <p className="text-base text-muted-foreground whitespace-pre-wrap">
-              {previewText || 'Preview not available for this document.'}
-            </p>
-          )}
-        </ExpandedModal>
-      )}
+      {
+        expandedSection === 'preview' && (
+          <ExpandedModal
+            section="preview"
+            title="Document Preview"
+            onClose={() => setExpandedSection(null)}
+          >
+            {highlightedPreview ? (
+              <div
+                className="text-base leading-relaxed text-muted-foreground space-y-4"
+                dangerouslySetInnerHTML={{ __html: highlightedPreview }}
+              />
+            ) : (
+              <p className="text-base text-muted-foreground whitespace-pre-wrap">
+                {previewText || 'Preview not available for this document.'}
+              </p>
+            )}
+          </ExpandedModal>
+        )
+      }
 
-      {expandedSection === 'analysis' && (
-        <ExpandedModal
-          section="analysis"
-          title="Document Analysis"
-          onClose={() => setExpandedSection(null)}
-        >
-          <div className="space-y-6">
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-lg font-semibold text-foreground">Summary</h4>
-                <button
-                  onClick={() => setShowDetailedSummary(!showDetailedSummary)}
-                  disabled={!comprehensiveSummary}
-                  className="flex items-center gap-2 text-sm px-4 py-2 bg-gradient-to-r from-primary/20 to-secondary/20 text-primary rounded-lg hover:from-primary/30 hover:to-secondary/30 transition-all duration-200 font-medium border border-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {showDetailedSummary ? (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Quick View</span>
-                    </>
-                  ) : (
-                    <>
-                      <BookOpen className="w-4 h-4" />
-                      <span>Detailed Analysis</span>
-                    </>
-                  )}
-                </button>
-              </div>
-              
-              {!showDetailedSummary ? (
-                <div>
-                  <p className="text-base text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                    {summary || 'No summary available.'}
-                  </p>
-                  {comprehensiveSummary && (
-                    <div className="mt-4 flex items-center gap-2 text-sm text-primary/70">
-                      <BookOpen className="w-4 h-4" />
-                      <span>Click "Detailed Analysis" for comprehensive breakdown</span>
-                    </div>
-                  )}
+      {
+        expandedSection === 'analysis' && (
+          <ExpandedModal
+            section="analysis"
+            title="Document Analysis"
+            onClose={() => setExpandedSection(null)}
+          >
+            <div className="space-y-6">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-semibold text-foreground">Summary</h4>
+                  <button
+                    onClick={() => setShowDetailedSummary(!showDetailedSummary)}
+                    disabled={!comprehensiveSummary}
+                    className="flex items-center gap-2 text-sm px-4 py-2 bg-gradient-to-r from-primary/20 to-secondary/20 text-primary rounded-lg hover:from-primary/30 hover:to-secondary/30 transition-all duration-200 font-medium border border-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {showDetailedSummary ? (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Quick View</span>
+                      </>
+                    ) : (
+                      <>
+                        <BookOpen className="w-4 h-4" />
+                        <span>Detailed Analysis</span>
+                      </>
+                    )}
+                  </button>
                 </div>
-              ) : comprehensiveSummary ? (
-                <div className="space-y-5 text-base">
-                  {/* Executive Summary */}
-                  {comprehensiveSummary.executive_summary && (
-                    <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-                      <p className="text-foreground leading-relaxed whitespace-pre-wrap">
-                        {comprehensiveSummary.executive_summary}
-                      </p>
-                    </div>
-                  )}
 
-                  {/* Parties */}
-                  {comprehensiveSummary.parties && comprehensiveSummary.parties.length > 0 && (
-                    <div>
-                      <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
-                        <Users className="w-5 h-5" />
-                        Parties Involved
-                      </h5>
-                      <div className="space-y-3">
-                        {comprehensiveSummary.parties.map((party, idx) => (
-                          <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-3">
-                            <div className="font-medium text-foreground text-base">{party.name}</div>
-                            <div className="text-sm text-primary">{party.role}</div>
-                            {party.simple_explanation && (
-                              <div className="text-sm text-muted-foreground mt-2">{party.simple_explanation}</div>
-                            )}
-                          </div>
-                        ))}
+                {!showDetailedSummary ? (
+                  <div>
+                    <p className="text-base text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                      {summary || 'No summary available.'}
+                    </p>
+                    {comprehensiveSummary && (
+                      <div className="mt-4 flex items-center gap-2 text-sm text-primary/70">
+                        <BookOpen className="w-4 h-4" />
+                        <span>Click "Detailed Analysis" for comprehensive breakdown</span>
                       </div>
-                    </div>
-                  )}
-
-                  {/* Purpose */}
-                  {comprehensiveSummary.purpose && (
-                    <div>
-                      <h5 className="font-semibold text-foreground mb-2 text-base">Purpose</h5>
-                      <p className="text-muted-foreground">{comprehensiveSummary.purpose}</p>
-                    </div>
-                  )}
-
-                  {/* Key Obligations */}
-                  {comprehensiveSummary.key_obligations && Object.keys(comprehensiveSummary.key_obligations).length > 0 && (
-                    <div>
-                      <h5 className="font-semibold text-foreground mb-3 text-base">Key Obligations</h5>
-                      <div className="space-y-3">
-                        {Object.entries(comprehensiveSummary.key_obligations).map(([party, obligation], idx) => (
-                          <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-3">
-                            <div className="font-medium text-foreground text-sm">{party}</div>
-                            <div className="text-sm text-muted-foreground mt-2">{obligation}</div>
-                          </div>
-                        ))}
+                    )}
+                  </div>
+                ) : comprehensiveSummary ? (
+                  <div className="space-y-5 text-base">
+                    {/* Executive Summary */}
+                    {comprehensiveSummary.executive_summary && (
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+                        <p className="text-foreground leading-relaxed whitespace-pre-wrap">
+                          {comprehensiveSummary.executive_summary}
+                        </p>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Financial Terms */}
-                  {comprehensiveSummary.financial_terms && comprehensiveSummary.financial_terms.length > 0 && (
-                    <div>
-                      <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
-                        <DollarSign className="w-5 h-5" />
-                        Financial Terms
-                      </h5>
-                      <div className="space-y-3">
-                        {comprehensiveSummary.financial_terms.map((term, idx) => (
-                          <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-3">
-                            <div className="flex justify-between items-start">
-                              <div className="text-sm text-foreground">{term.item}</div>
-                              <div className="text-sm font-semibold text-primary">{term.amount}</div>
+                    {/* Parties */}
+                    {comprehensiveSummary.parties && comprehensiveSummary.parties.length > 0 && (
+                      <div>
+                        <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
+                          <Users className="w-5 h-5" />
+                          Parties Involved
+                        </h5>
+                        <div className="space-y-3">
+                          {comprehensiveSummary.parties.map((party, idx) => (
+                            <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-3">
+                              <div className="font-medium text-foreground text-base">{party.name}</div>
+                              <div className="text-sm text-primary">{party.role}</div>
+                              {party.simple_explanation && (
+                                <div className="text-sm text-muted-foreground mt-2">{party.simple_explanation}</div>
+                              )}
                             </div>
-                            {term.simple_explanation && (
-                              <div className="text-sm text-muted-foreground mt-2">{term.simple_explanation}</div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Term & Termination */}
-                  {comprehensiveSummary.term_and_termination && (
-                    <div>
-                      <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
-                        <Calendar className="w-5 h-5" />
-                        Term & Termination
-                      </h5>
-                      <div className="bg-card/50 border border-border/40 rounded-lg p-3 space-y-2 text-sm">
-                        <div><span className="font-medium">Duration:</span> {comprehensiveSummary.term_and_termination.duration}</div>
-                        {comprehensiveSummary.term_and_termination.renewal_terms && (
-                          <div><span className="font-medium">Renewal:</span> {comprehensiveSummary.term_and_termination.renewal_terms}</div>
-                        )}
-                        {comprehensiveSummary.term_and_termination.termination_process && (
-                          <div><span className="font-medium">How to Exit:</span> {comprehensiveSummary.term_and_termination.termination_process}</div>
-                        )}
-                        {comprehensiveSummary.term_and_termination.notice_period && (
-                          <div><span className="font-medium">Notice:</span> {comprehensiveSummary.term_and_termination.notice_period}</div>
-                        )}
-                        {comprehensiveSummary.term_and_termination.simple_explanation && (
-                          <div className="text-muted-foreground mt-3 pt-3 border-t border-border/40">
-                            {comprehensiveSummary.term_and_termination.simple_explanation}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Important Deadlines */}
-                  {comprehensiveSummary.important_deadlines && comprehensiveSummary.important_deadlines.length > 0 && (
-                    <div>
-                      <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
-                        <Clock className="w-5 h-5" />
-                        Important Deadlines
-                      </h5>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                        {comprehensiveSummary.important_deadlines.map((deadline, idx) => (
-                          <li key={idx} className="flex items-start gap-2">
-                            <span className="text-primary mt-0.5">•</span>
-                            <span>{deadline}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Legal Terms Explained */}
-                  {comprehensiveSummary.legal_terms_explained && comprehensiveSummary.legal_terms_explained.length > 0 && (
-                    <div>
-                      <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
-                        <BookOpen className="w-5 h-5" />
-                        Legal Terms in Plain English
-                      </h5>
-                      <div className="space-y-3">
-                        {comprehensiveSummary.legal_terms_explained.map((item, idx) => (
-                          <div key={idx} className="bg-secondary/10 border border-secondary/20 rounded-lg p-3">
-                            <div className="font-medium text-foreground text-sm">{item.term}</div>
-                            <div className="text-sm text-muted-foreground mt-2">{item.meaning}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Compliance Requirements */}
-                  {comprehensiveSummary.compliance_requirements && comprehensiveSummary.compliance_requirements.length > 0 && (
-                    <div>
-                      <h5 className="font-semibold text-foreground mb-3 text-base">Compliance Requirements</h5>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                        {comprehensiveSummary.compliance_requirements.map((req, idx) => (
-                          <li key={idx} className="flex items-start gap-2">
-                            <span className="text-primary mt-0.5">•</span>
-                            <span>{req}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Attachments */}
-                  {comprehensiveSummary.attachments_mentioned && comprehensiveSummary.attachments_mentioned.length > 0 && (
-                    <div>
-                      <h5 className="font-semibold text-foreground mb-3 text-base">Attachments/Schedules</h5>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                        {comprehensiveSummary.attachments_mentioned.map((att, idx) => (
-                          <li key={idx} className="flex items-start gap-2">
-                            <span className="text-primary mt-0.5">•</span>
-                            <span>{att}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-base">No detailed summary available.</p>
-              )}
-            </div>
-
-            <div>
-              <h4 className="text-lg font-semibold text-foreground mb-3">High-Risk Clauses</h4>
-              {highRiskClauses.length ? (
-                <ul className="space-y-4">
-                  {highRiskClauses.map((clause, idx) => {
-                    const { score, level } = getRiskDisplay(clause);
-                    const text = clause?.clause_text || clause?.clauseText || '';
-                    const rationale = clause?.rationale || clause?.reason || '';
-                    const mitigation = getMitigation(clause);
-                    const replacement = getReplacementClause(clause);
-                    return (
-                      <li key={`risk-${idx}`} className="p-4 rounded-xl border border-border/40 bg-background/40">
-                        <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-secondary mb-2">
-                          <ShieldAlert className="w-5 h-5" />
-                          <span>Risk: {level}{score ? ` • ${score}/5` : ''}</span>
+                          ))}
                         </div>
-                        {text && (
-                          <p className="text-base text-foreground leading-relaxed mb-2 whitespace-pre-wrap">{text}</p>
-                        )}
-                        {rationale && (
-                          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{rationale}</p>
-                        )}
-                        {mitigation && (
-                          <div className="mt-3 flex items-start gap-2 text-sm bg-primary/10 border border-primary/30 rounded-lg p-3">
-                            <Lightbulb className="w-5 h-5 mt-0.5 text-primary" />
-                            <div className="text-muted-foreground whitespace-pre-wrap">
-                              <span className="font-semibold text-primary">Suggested Change:</span> {mitigation}
-                            </div>
-                          </div>
-                        )}
-                        {replacement && (
-                          <div className="mt-3 flex items-start gap-2 text-sm bg-card/50 border border-border/40 rounded-lg p-3">
-                            <FileText className="w-5 h-5 mt-0.5 text-secondary" />
-                            <div className="text-muted-foreground whitespace-pre-wrap">
-                              <span className="font-semibold text-foreground">Alternate Clause:</span> {replacement}
-                            </div>
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="text-base text-muted-foreground leading-relaxed">
-                  No high-risk clauses were flagged in the preview.
-                </p>
-              )}
-            </div>
-          </div>
-        </ExpandedModal>
-      )}
+                      </div>
+                    )}
 
-      {expandedSection === 'chat' && (
-        <ExpandedModal
-          section="chat"
-          title="Ask Questions"
-          onClose={() => setExpandedSection(null)}
-        >
-          <div className="flex flex-col h-[70vh]">
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar mb-6">
-              {chatHistory.map((message) => (
-                <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'User' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-                  {message.sender !== 'User' && (
-                    <div className="w-10 h-10 rounded-full bg-card flex items-center justify-center flex-shrink-0">
-                      <Bot className="w-6 h-6 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className={`max-w-[75%]`}>
-                    <div className={`rounded-2xl px-5 py-4 ${
-                      message.sender === 'User' ? 'bg-gradient-to-br from-primary to-secondary text-foreground shadow-lg shadow-primary/20' : 'bg-card/50 text-foreground border border-border/50'
-                    }`}>
-                      <p className="text-base leading-relaxed whitespace-pre-wrap">{message.message}</p>
-                    </div>
-                  </div>
-                  {message.sender === 'User' && (
-                    <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                      <User className="w-6 h-6 text-foreground" />
-                    </div>
-                  )}
-                </div>
-              ))}
-              {loading && (
-                <div className="flex justify-start">
-                  <div className="bg-card/50 border border-border/50 px-5 py-4 rounded-2xl flex items-center gap-2">
-                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                    <span className="text-base text-muted-foreground">Thinking...</span>
-                  </div>
-                </div>
-              )}
-            </div>
+                    {/* Purpose */}
+                    {comprehensiveSummary.purpose && (
+                      <div>
+                        <h5 className="font-semibold text-foreground mb-2 text-base">Purpose</h5>
+                        <p className="text-muted-foreground">{comprehensiveSummary.purpose}</p>
+                      </div>
+                    )}
 
-            {/* Input */}
-            <div className="border-t border-border/50 pt-4">
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Ask anything about your document..."
-                  disabled={!sessionId || loading}
-                  className="flex-1 px-5 py-4 bg-card/50 border border-border/50 rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-base"
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!sessionId || !chatMessage.trim() || loading}
-                  className="px-8 py-4 bg-gradient-to-r from-primary to-secondary text-foreground rounded-xl font-medium hover:shadow-lg hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
-                >
-                  {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Send className="w-6 h-6" /><span>Send</span></>}
-                </button>
+                    {/* Key Obligations */}
+                    {comprehensiveSummary.key_obligations && Object.keys(comprehensiveSummary.key_obligations).length > 0 && (
+                      <div>
+                        <h5 className="font-semibold text-foreground mb-3 text-base">Key Obligations</h5>
+                        <div className="space-y-3">
+                          {Object.entries(comprehensiveSummary.key_obligations).map(([party, obligation], idx) => (
+                            <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-3">
+                              <div className="font-medium text-foreground text-sm">{party}</div>
+                              <div className="text-sm text-muted-foreground mt-2">{obligation}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Financial Terms */}
+                    {comprehensiveSummary.financial_terms && comprehensiveSummary.financial_terms.length > 0 && (
+                      <div>
+                        <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
+                          <DollarSign className="w-5 h-5" />
+                          Financial Terms
+                        </h5>
+                        <div className="space-y-3">
+                          {comprehensiveSummary.financial_terms.map((term, idx) => (
+                            <div key={idx} className="bg-card/50 border border-border/40 rounded-lg p-3">
+                              <div className="flex justify-between items-start">
+                                <div className="text-sm text-foreground">{term.item}</div>
+                                <div className="text-sm font-semibold text-primary">{term.amount}</div>
+                              </div>
+                              {term.simple_explanation && (
+                                <div className="text-sm text-muted-foreground mt-2">{term.simple_explanation}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Term & Termination */}
+                    {comprehensiveSummary.term_and_termination && (
+                      <div>
+                        <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
+                          <Calendar className="w-5 h-5" />
+                          Term & Termination
+                        </h5>
+                        <div className="bg-card/50 border border-border/40 rounded-lg p-3 space-y-2 text-sm">
+                          <div><span className="font-medium">Duration:</span> {comprehensiveSummary.term_and_termination.duration}</div>
+                          {comprehensiveSummary.term_and_termination.renewal_terms && (
+                            <div><span className="font-medium">Renewal:</span> {comprehensiveSummary.term_and_termination.renewal_terms}</div>
+                          )}
+                          {comprehensiveSummary.term_and_termination.termination_process && (
+                            <div><span className="font-medium">How to Exit:</span> {comprehensiveSummary.term_and_termination.termination_process}</div>
+                          )}
+                          {comprehensiveSummary.term_and_termination.notice_period && (
+                            <div><span className="font-medium">Notice:</span> {comprehensiveSummary.term_and_termination.notice_period}</div>
+                          )}
+                          {comprehensiveSummary.term_and_termination.simple_explanation && (
+                            <div className="text-muted-foreground mt-3 pt-3 border-t border-border/40">
+                              {comprehensiveSummary.term_and_termination.simple_explanation}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Important Deadlines */}
+                    {comprehensiveSummary.important_deadlines && comprehensiveSummary.important_deadlines.length > 0 && (
+                      <div>
+                        <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
+                          <Clock className="w-5 h-5" />
+                          Important Deadlines
+                        </h5>
+                        <ul className="space-y-2 text-sm text-muted-foreground">
+                          {comprehensiveSummary.important_deadlines.map((deadline, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-primary mt-0.5">•</span>
+                              <span>{deadline}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Legal Terms Explained */}
+                    {comprehensiveSummary.legal_terms_explained && comprehensiveSummary.legal_terms_explained.length > 0 && (
+                      <div>
+                        <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-base">
+                          <BookOpen className="w-5 h-5" />
+                          Legal Terms in Plain English
+                        </h5>
+                        <div className="space-y-3">
+                          {comprehensiveSummary.legal_terms_explained.map((item, idx) => (
+                            <div key={idx} className="bg-secondary/10 border border-secondary/20 rounded-lg p-3">
+                              <div className="font-medium text-foreground text-sm">{item.term}</div>
+                              <div className="text-sm text-muted-foreground mt-2">{item.meaning}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Compliance Requirements */}
+                    {comprehensiveSummary.compliance_requirements && comprehensiveSummary.compliance_requirements.length > 0 && (
+                      <div>
+                        <h5 className="font-semibold text-foreground mb-3 text-base">Compliance Requirements</h5>
+                        <ul className="space-y-2 text-sm text-muted-foreground">
+                          {comprehensiveSummary.compliance_requirements.map((req, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-primary mt-0.5">•</span>
+                              <span>{req}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Attachments */}
+                    {comprehensiveSummary.attachments_mentioned && comprehensiveSummary.attachments_mentioned.length > 0 && (
+                      <div>
+                        <h5 className="font-semibold text-foreground mb-3 text-base">Attachments/Schedules</h5>
+                        <ul className="space-y-2 text-sm text-muted-foreground">
+                          {comprehensiveSummary.attachments_mentioned.map((att, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-primary mt-0.5">•</span>
+                              <span>{att}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-base">No detailed summary available.</p>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-lg font-semibold text-foreground mb-3">High-Risk Clauses</h4>
+                {highRiskClauses.length ? (
+                  <ul className="space-y-4">
+                    {highRiskClauses.map((clause, idx) => {
+                      const { score, level } = getRiskDisplay(clause);
+                      const text = clause?.clause_text || clause?.clauseText || '';
+                      const rationale = clause?.rationale || clause?.reason || '';
+                      const mitigation = getMitigation(clause);
+                      const replacement = getReplacementClause(clause);
+                      return (
+                        <li key={`risk-${idx}`} className="p-4 rounded-xl border border-border/40 bg-background/40">
+                          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-secondary mb-2">
+                            <ShieldAlert className="w-5 h-5" />
+                            <span>Risk: {level}{score ? ` • ${score}/5` : ''}</span>
+                          </div>
+                          {text && (
+                            <p className="text-base text-foreground leading-relaxed mb-2 whitespace-pre-wrap">{text}</p>
+                          )}
+                          {rationale && (
+                            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{rationale}</p>
+                          )}
+                          {mitigation && (
+                            <div className="mt-3 flex items-start gap-2 text-sm bg-primary/10 border border-primary/30 rounded-lg p-3">
+                              <Lightbulb className="w-5 h-5 mt-0.5 text-primary" />
+                              <div className="text-muted-foreground whitespace-pre-wrap">
+                                <span className="font-semibold text-primary">Suggested Change:</span> {mitigation}
+                              </div>
+                            </div>
+                          )}
+                          {replacement && (
+                            <div className="mt-3 flex items-start gap-2 text-sm bg-card/50 border border-border/40 rounded-lg p-3">
+                              <FileText className="w-5 h-5 mt-0.5 text-secondary" />
+                              <div className="text-muted-foreground whitespace-pre-wrap">
+                                <span className="font-semibold text-foreground">Alternate Clause:</span> {replacement}
+                              </div>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="text-base text-muted-foreground leading-relaxed">
+                    No high-risk clauses were flagged in the preview.
+                  </p>
+                )}
               </div>
             </div>
-          </div>
-        </ExpandedModal>
-      )}
-    </div>
+          </ExpandedModal>
+        )
+      }
+
+      {
+        expandedSection === 'chat' && (
+          <ExpandedModal
+            section="chat"
+            title="Ask Questions"
+            onClose={() => setExpandedSection(null)}
+          >
+            <div className="flex flex-col h-[70vh]">
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar mb-6">
+                {chatHistory.map((message) => (
+                  <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'User' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                    {message.sender !== 'User' && (
+                      <div className="w-10 h-10 rounded-full bg-card flex items-center justify-center flex-shrink-0">
+                        <Bot className="w-6 h-6 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className={`max-w-[75%]`}>
+                      <div className={`rounded-2xl px-5 py-4 ${message.sender === 'User' ? 'bg-gradient-to-br from-primary to-secondary text-foreground shadow-lg shadow-primary/20' : 'bg-card/50 text-foreground border border-border/50'
+                        }`}>
+                        <p className="text-base leading-relaxed whitespace-pre-wrap">{message.message}</p>
+                      </div>
+                    </div>
+                    {message.sender === 'User' && (
+                      <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                        <User className="w-6 h-6 text-foreground" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {loading && (
+                  <div className="flex justify-start">
+                    <div className="bg-card/50 border border-border/50 px-5 py-4 rounded-2xl flex items-center gap-2">
+                      <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                      <span className="text-base text-muted-foreground">Thinking...</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Input */}
+              <div className="border-t border-border/50 pt-4">
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={chatMessage}
+                    onChange={(e) => setChatMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Ask anything about your document..."
+                    disabled={!sessionId || loading}
+                    className="flex-1 px-5 py-4 bg-card/50 border border-border/50 rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-base"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={!sessionId || !chatMessage.trim() || loading}
+                    className="px-8 py-4 bg-gradient-to-r from-primary to-secondary text-foreground rounded-xl font-medium hover:shadow-lg hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
+                  >
+                    {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Send className="w-6 h-6" /><span>Send</span></>}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </ExpandedModal>
+        )
+      }
+    </div >
   );
 };
 

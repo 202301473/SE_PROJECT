@@ -11,9 +11,9 @@ const CommentList = ({ documentId }) => {
   const location = useLocation(); // Get location object
   const [highlightCommentId, setHighlightCommentId] = useState(null); // State to store comment ID to highlight
 
-  const fetchComments = useCallback(async () => {
+  const fetchComments = useCallback(async (silent = false) => {
     console.log('Fetching comments for documentId:', documentId);
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const response = await axios.get(`/api/documents/${documentId}/comments/`);
       setComments(response.data);
@@ -22,7 +22,7 @@ const CommentList = ({ documentId }) => {
       console.error('Error fetching comments:', err);
       setError('Failed to load comments.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
       console.log('Finished fetching comments.');
     }
   }, [documentId]);
@@ -39,9 +39,10 @@ const CommentList = ({ documentId }) => {
 
     // WebSocket setup
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Assuming Django backend is on port 8000 for WebSocket connections
     const accessToken = localStorage.getItem('access_token');
-    let wsUrl = `${protocol}//localhost:8000/ws/document/${documentId}/`;
+    const hostname = window.location.hostname;
+    const port = '8000'; // Assuming backend is on port 8000
+    let wsUrl = `${protocol}//${hostname}:${port}/ws/document/${documentId}/`;
     if (accessToken) {
       wsUrl += `?token=${accessToken}`;
     }
@@ -56,16 +57,49 @@ const CommentList = ({ documentId }) => {
       const data = JSON.parse(event.data);
       if (data.type === 'new_comment') {
         console.log('New comment received via WebSocket:', data.comment);
-        // Directly add the new comment to the state
+
         setComments((prevComments) => {
-          // Check if the comment already exists to prevent duplicates
-          if (!prevComments.some(c => c.id === data.comment.id)) {
-            const updatedComments = [...prevComments, data.comment];
-            console.log('Comments updated via WebSocket:', updatedComments);
-            return updatedComments;
+          const newComment = data.comment;
+
+          // Helper to check if comment exists in tree
+          const commentExists = (list, id) => {
+            return list.some(c => {
+              if (c.id === id) return true;
+              if (c.replies && c.replies.length > 0) {
+                return commentExists(c.replies, id);
+              }
+              return false;
+            });
+          };
+
+          if (commentExists(prevComments, newComment.id)) {
+            console.log('Comment already exists, skipping:', newComment.id);
+            return prevComments;
           }
-          console.log('Comment already exists, not adding duplicate:', data.comment);
-          return prevComments;
+
+          // Helper to add comment to tree
+          const addCommentToTree = (list, comment) => {
+            if (!comment.parent_comment) {
+              return [...list, comment];
+            }
+            return list.map(c => {
+              if (c.id === comment.parent_comment) {
+                return {
+                  ...c,
+                  replies: [...(c.replies || []), comment]
+                };
+              } else if (c.replies && c.replies.length > 0) {
+                return {
+                  ...c,
+                  replies: addCommentToTree(c.replies, comment)
+                };
+              }
+              return c;
+            });
+          };
+
+          const updated = addCommentToTree(prevComments, newComment);
+          return updated;
         });
       }
     };
@@ -82,7 +116,7 @@ const CommentList = ({ documentId }) => {
       console.log('Cleaning up WebSocket for document:', documentId);
       newWs.close();
     };
-  }, [documentId, fetchComments, location.search]); // Add location.search to dependencies
+  }, [documentId, fetchComments, location.search]);
 
   if (!documentId) {
     return <div className="text-center py-4 text-gray-600">Save the document to enable comments.</div>;
@@ -94,7 +128,7 @@ const CommentList = ({ documentId }) => {
   return (
     <div className="comment-section bg-card/40 p-4 rounded-lg shadow-md">
       <h3 className="text-xl font-bold mb-4 text-foreground">Comments</h3>
-      <CommentForm documentId={documentId} onCommentAdded={fetchComments} />
+      <CommentForm documentId={documentId} onCommentAdded={() => fetchComments(true)} />
       <div className="comments-list mt-6 overflow-y-auto custom-scrollbar">
         {comments.length === 0 ? (
           <p className="text-muted-foreground">No comments.</p>
@@ -104,7 +138,7 @@ const CommentList = ({ documentId }) => {
               key={comment.id}
               comment={comment}
               documentId={documentId}
-              onCommentAdded={fetchComments}
+              onCommentAdded={() => fetchComments(true)}
               highlightCommentId={highlightCommentId} // Pass highlight ID
             />
           ))
