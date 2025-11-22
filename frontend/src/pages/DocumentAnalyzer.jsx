@@ -76,6 +76,13 @@ const DocumentAnalyzer = () => {
   const [expandedSection, setExpandedSection] = useState(null); // Modal state: 'preview', 'analysis', 'chat', or null
   const [documentType, setDocumentType] = useState(''); // New state for document type
   const [documentTypeConfidence, setDocumentTypeConfidence] = useState(null); // New state for document type confidence
+  const chatContainerRef = useRef(null);
+
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatHistory, loading]);
 
 
   const resetForNewDocument = () => {
@@ -368,7 +375,7 @@ const DocumentAnalyzer = () => {
   // Modal component for expanded sections
   const ExpandedModal = ({ section, onClose, children, title }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 pt-20">
-      <div className="bg-card/95 backdrop-blur-xl rounded-2xl border border-border/50 w-full max-w-6xl max-h-[85vh] flex flex-col shadow-2xl">
+      <div className={`bg-card/95 backdrop-blur-xl rounded-2xl border border-border/50 w-full max-w-6xl flex flex-col shadow-2xl ${section === 'chat' ? 'h-[85vh]' : 'max-h-[85vh]'}`}>
         <div className="p-6 border-b border-border/50 bg-gradient-to-r from-primary/5 to-secondary/5 flex items-center justify-between flex-shrink-0">
           <h3 className="text-xl font-semibold text-foreground">{title}</h3>
           <button
@@ -378,12 +385,80 @@ const DocumentAnalyzer = () => {
             <X className="w-6 h-6 text-muted-foreground" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+        <div className={`flex-1 min-h-0 ${section === 'chat' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto custom-scrollbar p-6'}`}>
           {children}
         </div>
       </div>
     </div>
   );
+
+  // ... (inside render)
+
+  {
+    expandedSection === 'chat' && (
+      <ExpandedModal
+        section="chat"
+        title="Ask Questions"
+        onClose={() => setExpandedSection(null)}
+      >
+        <div className="flex flex-col h-full p-6 gap-4">
+          {/* Messages */}
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2 min-h-0">
+            {chatHistory.map((message) => (
+              <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'User' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                {message.sender !== 'User' && (
+                  <div className="w-10 h-10 rounded-full bg-card flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                )}
+                <div className={`max-w-[75%]`}>
+                  <div className={`rounded-2xl px-5 py-4 ${message.sender === 'User' ? 'bg-gradient-to-br from-primary to-secondary text-foreground shadow-lg shadow-primary/20' : 'bg-card/50 text-foreground border border-border/50'
+                    }`}>
+                    <p className="text-base leading-relaxed whitespace-pre-wrap">{message.message}</p>
+                  </div>
+                </div>
+                {message.sender === 'User' && (
+                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                    <User className="w-6 h-6 text-foreground" />
+                  </div>
+                )}
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-card/50 border border-border/50 px-5 py-4 rounded-2xl flex items-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  <span className="text-base text-muted-foreground">Thinking...</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="border-t border-border/50 pt-4 flex-shrink-0">
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={chatMessage}
+                onChange={(e) => setChatMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask anything about your document..."
+                disabled={!sessionId || loading}
+                className="flex-1 px-5 py-4 bg-card/50 border border-border/50 rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-base"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!sessionId || !chatMessage.trim() || loading}
+                className="px-8 py-4 bg-gradient-to-r from-primary to-secondary text-foreground rounded-xl font-medium hover:shadow-lg hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
+              >
+                {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Send className="w-6 h-6" /><span>Send</span></>}
+              </button>
+            </div>
+          </div>
+        </div>
+      </ExpandedModal>
+    )
+  }
 
   return (
     <div className="flex h-[calc(100vh-var(--navbar-height))] bg-background overflow-hidden">
@@ -644,7 +719,7 @@ const DocumentAnalyzer = () => {
 
           {/* Analysis & Chat Grid */}
           {hasAnalysis && (
-            <div className="grid lg:grid-cols-3 gap-6 flex-1">
+            <div className="grid lg:grid-cols-3 gap-6 flex-1 min-h-0 overflow-hidden">
               {/* Left Column: Document Preview + Analysis */}
               <div className="lg:col-span-2 flex flex-col gap-6 flex-1 overflow-y-auto custom-scrollbar">
                 {/* Document Preview */}
@@ -998,8 +1073,8 @@ const DocumentAnalyzer = () => {
               </div>
 
               {/* Right Column: Questions/Chat Interface */}
-              <div className="lg:col-span-1 flex flex-col flex-1">
-                <div className="bg-card/40 backdrop-blur-xl rounded-2xl border border-border/50 overflow-hidden flex flex-col h-full">
+              <div className="lg:col-span-1 flex flex-col flex-1 min-h-0">
+                <div className="bg-card/40 backdrop-blur-xl rounded-2xl border border-border/50 overflow-hidden flex flex-col h-full min-h-0">
                   <div className="p-6 border-b border-border/50 bg-gradient-to-r from-primary/5 to-secondary/5 flex-shrink-0">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-3">
@@ -1020,7 +1095,7 @@ const DocumentAnalyzer = () => {
                   </div>
 
                   {/* Messages */}
-                  <div className="flex-1 overflow-y-auto p-6 pt-8 space-y-4 custom-scrollbar">
+                  <div className="flex-1 overflow-y-auto p-6 pt-8 space-y-4 custom-scrollbar min-h-0">
                     {chatHistory.map((message) => (
                       <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'User' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
                         {message.sender !== 'User' && (
@@ -1379,9 +1454,9 @@ const DocumentAnalyzer = () => {
             title="Ask Questions"
             onClose={() => setExpandedSection(null)}
           >
-            <div className="flex flex-col h-[70vh]">
+            <div className="flex flex-col h-full p-6">
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar mb-6">
+              <div ref={chatContainerRef} className="flex-1 overflow-y-auto space-y-4 custom-scrollbar mb-6 pr-2 min-h-0">
                 {chatHistory.map((message) => (
                   <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'User' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
                     {message.sender !== 'User' && (
