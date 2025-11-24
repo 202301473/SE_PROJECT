@@ -25,7 +25,7 @@ export default function Navbar() {
 
   const navLinks = [
     { to: "/", label: "Home" },
-    { to: "/document-analyser", label: "Document Analyzer" },
+    { to: "/document-analyzer", label: "Document Analyzer" },
     { to: "/document-creation", label: "Document Generator" },
     { to: "/lawyer-connect", label: "Connect" },
     { to: "/my-documents", label: "My Documents" },
@@ -34,6 +34,10 @@ export default function Navbar() {
 
   if (isAuthenticated && user?.role === 'lawyer') {
     navLinks.push({ to: "/lawyer-dashboard", label: "Lawyer Dashboard", requiresAuth: true });
+  }
+
+  if (isAuthenticated && (user?.is_superuser || user?.role === 'admin')) {
+    navLinks.push({ to: "/admin/lawyer-verification", label: "Verify Lawyers", requiresAuth: true });
   }
 
   return (

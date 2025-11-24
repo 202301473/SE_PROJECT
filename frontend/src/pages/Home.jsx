@@ -2,7 +2,7 @@
 
 import { ArrowRight, Shield, FileText, Zap, CheckCircle2, Sparkles, ArrowUpRight, X } from "lucide-react"
 import { Button } from "@/Components/ui/button"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import React, { useState, Suspense } from "react"
 import Navbar from "@/Components/Navbar/Navbar" // Import the new Navbar component
 
@@ -14,6 +14,7 @@ export default function Home() {
   const [selectedFeature, setSelectedFeature] = useState(null)
   const [activeDemo, setActiveDemo] = useState("analyzer")
   const { isAuthenticated } = useAuth(); // Get isAuthenticated from AuthContext
+  const navigate = useNavigate(); // Add navigate hook
   // isLoggedIn, showProfileMenu, profileMenuRef, navigate, isAuthenticated, user, logout, handleProtectedNavClick are now handled by Navbar component
 
   const featureDetails = {
@@ -112,19 +113,17 @@ export default function Home() {
                       <Button
                         size="lg"
                         className="gap-2 bg-gradient-to-r from-primary to-secondary hover:shadow-lg hover:shadow-primary/50 text-white font-bold text-base px-8"
-                        asChild
+                        onClick={() => navigate("/document-creation")}
                       >
-                        <Link to="/document-creation">
-                          Document Generation <ArrowRight className="w-5 h-5" />
-                        </Link>
+                        Document Generation <ArrowRight className="w-5 h-5" />
                       </Button>
                       <Button
                         size="lg"
                         variant="outline"
                         className="border-2 border-muted-foreground/30 font-bold text-base px-8 bg-transparent"
-                        asChild
+                        onClick={() => navigate("/document-analyzer")}
                       >
-                        <Link to="/document-analyzer">Document Analyzer</Link>
+                        Document Analyzer
                       </Button>
                     </>
                   ) : (
@@ -132,19 +131,17 @@ export default function Home() {
                       <Button
                         size="lg"
                         className="gap-2 bg-gradient-to-r from-primary to-secondary hover:shadow-lg hover:shadow-primary/50 text-white font-bold text-base px-8"
-                        asChild
+                        onClick={() => navigate("/signup")}
                       >
-                        <Link to="/signup">
-                          Sign Up <ArrowRight className="w-5 h-5" />
-                        </Link>
+                        Sign Up <ArrowRight className="w-5 h-5" />
                       </Button>
                       <Button
                         size="lg"
                         variant="outline"
                         className="border-2 border-muted-foreground/30 font-bold text-base px-8 bg-transparent"
-                        asChild
+                        onClick={() => navigate("/login")}
                       >
-                        <Link to="/login">Sign In</Link>
+                        Sign In
                       </Button>
                     </>
                   )}

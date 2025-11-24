@@ -27,7 +27,7 @@ MONGO_URI = os.getenv("MONGO_URI")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "legal_document_navigator_db")
 
 if not MONGO_URI:
-    raise ValueError("❌ MONGO_URI environment variable is not set. Please configure it in your .env file.")
+    raise ValueError("MONGO_URI environment variable is not set. Please configure it in your .env file.")
 
 # Disconnect all existing connections first to prevent conflicts
 mongoengine.disconnect_all()
@@ -43,9 +43,9 @@ try:
         socketTimeoutMS=10000,
         uuidRepresentation='standard'
     )
-    print(f"✅ MongoDB connected successfully: {MONGO_DB_NAME}")
+    print(f"[OK] MongoDB connected successfully: {MONGO_DB_NAME}")
 except Exception as e:
-    print(f"❌ Failed to connect to MongoDB: {e}")
+    print(f"[ERROR] Failed to connect to MongoDB: {e}")
     raise
 
 
@@ -73,9 +73,27 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5175",
+    "http://localhost:5176",
+    "http://127.0.0.1:5176",
     "https://doc-gen-iota.vercel.app",
     "https://se-project-navy.vercel.app",
-    
+]
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
 ]
 CORS_EXPOSE_HEADERS = ['Content-Disposition']
 

@@ -3,10 +3,10 @@ import { useNavigate, Link } from "react-router-dom";
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { GoogleLoginButton } from '@/Components/ui/GoogleLoginButton';
-import { Button } from "@/Components/ui/button";
-import { Input } from "@/Components/ui/Input";
-import { Label } from "@/Components/ui/Label";
+import { GoogleLoginButton } from '../Components/ui/GoogleLoginButton';
+import { Button } from "../Components/ui/button";
+import { Input } from "../Components/ui/Input";
+import { Label } from "../Components/ui/Label";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -127,30 +127,37 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background relative overflow-hidden">
+    <div className="w-full h-full flex items-center justify-center relative" style={{ minHeight: '100%', height: '100%', position: 'relative', zIndex: 50, backgroundColor: 'transparent' }}>
       {/* Background gradients */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent pointer-events-none"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent pointer-events-none" style={{ zIndex: 0 }}></div>
       
       {/* Go back button */}
       <button
         type="button"
         onClick={() => navigate(-1)}
-        className="absolute top-4 left-4 z-20 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card/50 hover:bg-card/70 text-muted-foreground border border-border/50 shadow-lg backdrop-blur-md transition-all duration-200"
+        className="absolute top-4 left-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card hover:bg-card/90 text-foreground border border-border/50 shadow-lg backdrop-blur-md transition-all duration-200"
+        style={{ zIndex: 100, position: 'absolute' }}
       >
         <span className="text-xl leading-none">←</span>
-        <span className="text-sm font-medium tracking-wide uppercase opacity-90">Go back</span>
+        <span className="text-sm font-medium tracking-wide uppercase">Go back</span>
       </button>
       
       {/* Login form card */}
-      <div className="w-full max-w-md p-8 space-y-6 bg-card/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-border/50 relative z-10 animate-fade-in">
+      <div className="w-full max-w-md p-8 space-y-6 rounded-2xl shadow-2xl border relative mx-4 my-8" style={{ 
+        zIndex: 50, 
+        position: 'relative',
+        backgroundColor: 'var(--card)',
+        borderColor: 'var(--border)',
+        color: 'var(--foreground)'
+      }}>
         <div className="text-center">
           <div className="inline-block mb-4 px-4 py-2 bg-primary/20 rounded-full border border-primary/30">
             <span className="text-primary text-sm font-semibold">Welcome Back</span>
           </div>
-          <h1 className="text-4xl font-extrabold text-foreground mb-2 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
+          <h1 className="text-4xl font-extrabold mb-2" style={{ color: 'var(--foreground)' }}>
             Login
           </h1>
-          <p className="text-muted-foreground">Enter your email below to login to your account</p>
+          <p className="text-muted-foreground" style={{ color: 'var(--muted-foreground)' }}>Enter your email below to login to your account</p>
         </div>
 
         <GoogleLoginButton

@@ -226,3 +226,80 @@ def connection_requests_list_view(request):
     connection_requests = LawyerConnectionRequest.objects(client=user).order_by('-created_at')
     serializer = LawyerConnectionRequestSerializer(connection_requests, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pending_lawyers_list_view(request):
+    """List all lawyers pending verification (Admin only)"""
+    if not request.user.is_superuser and request.user.role != 'admin':
+        return Response({'error': 'Access denied. Admin only.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    status_filter = request.query_params.get('status', 'pending')
+    if status_filter not in ['pending', 'approved', 'rejected', 'all']:
+        status_filter = 'pending'
+    
+    if status_filter == 'all':
+        profiles = LawyerProfile.objects().order_by('-created_at')
+    else:
+        profiles = LawyerProfile.objects(verification_status=status_filter).order_by('-created_at')
+    
+    result = []
+    for profile in profiles:
+        user_data = UserSerializer(profile.user).data
+        profile_data = LawyerProfileSerializer(profile).data
+        result.append({
+            **profile_data,
+            'user': user_data,
+        })
+    
+    return Response(result, status=status.HTTP_200_OK)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def verify_lawyer_view(request, lawyer_id):
+    """Verify or update lawyer verification status (Admin only)"""
+    if not request.user.is_superuser and request.user.role != 'admin':
+        return Response({'error': 'Access denied. Admin only.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        user = User.objects(id=lawyer_id, role='lawyer').first()
+        if not user:
+            return Response({'error': 'Lawyer not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        profile = LawyerProfile.objects(user=user).first()
+        if not profile:
+            return Response({'error': 'Lawyer profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        new_status = request.data.get('status')
+        notes = request.data.get('notes', '')
+        
+        if new_status not in ['approved', 'rejected', 'pending']:
+            return Response({'error': 'Invalid status. Must be approved, rejected, or pending.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        old_status = profile.verification_status
+        profile.verification_status = new_status
+        profile.verified_at = datetime.utcnow() if new_status == 'approved' else None
+        
+        if notes:
+            profile.verification_notes = notes
+        
+        profile.save()
+        
+        # Update user's lawyer verification status
+        user.lawyer_verification_status = new_status
+        user.is_lawyer_verified = (new_status == 'approved')
+        if new_status == 'approved':
+            user.lawyer_verified_at = datetime.utcnow()
+        user.save()
+        
+        serializer = LawyerProfileSerializer(profile)
+        return Response({
+            'message': f'Lawyer verification status updated from {old_status} to {new_status}.',
+            'profile': serializer.data,
+            'user': UserSerializer(user).data,
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

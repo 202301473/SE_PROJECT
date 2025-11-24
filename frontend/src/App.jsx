@@ -21,6 +21,7 @@ import DocumentVersions from "./pages/DocumentVersions"; // Added this import
 import SharedDocumentView from "./pages/SharedDocumentView";
 import ChatList from "./pages/ChatList";
 import Chat from "./pages/Chat";
+import AdminLawyerVerification from "./pages/AdminLawyerVerification";
 import ParticlesComponent from "./Components/Particles";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -34,14 +35,14 @@ function AppContent() {
       <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-gray-900 via-gray-800 to-black opacity-60" style={{ zIndex: -2 }}></div>
       <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-3/4 h-3/4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/30 via-purple-900/20 to-transparent blur-3xl" style={{ zIndex: -1 }}></div>
       {shouldShowNavbar && <Navbar />}
-      <div style={{ position: 'absolute', zIndex: -1, width: '100%', height: '100%', opacity: 0.4 }}>
+      <div style={{ position: 'absolute', zIndex: -1, width: '100%', height: '100%', opacity: 0.4, pointerEvents: 'none' }}>
         <ParticlesComponent id="tsparticles" />
       </div>
-      <main className="flex-grow relative z-10" style={{ height: 'calc(100vh - var(--navbar-height))' }}> {/* Use calc() for main height */}
+      <main className="flex-grow relative z-10 overflow-auto" style={{ height: shouldShowNavbar ? 'calc(100vh - var(--navbar-height))' : '100vh', minHeight: shouldShowNavbar ? 'calc(100vh - var(--navbar-height))' : '100vh' }}> {/* Use calc() for main height */}
         <Routes>
           <Route path="/" element={<Home />} />
           <Route
-            path="/document-analyser"
+            path="/document-analyzer"
             element={(
               <ProtectedRoute>
                 <DocumentAnalyzer />
@@ -49,7 +50,7 @@ function AppContent() {
             )}
           />
           <Route
-            path="/document-analyser/:id"
+            path="/document-analyzer/:id"
             element={(
               <ProtectedRoute>
                 <DocumentAnalyzer />
@@ -112,6 +113,14 @@ function AppContent() {
               </ProtectedRoute>
             )}
           />
+          <Route
+            path="/admin/lawyer-verification"
+            element={(
+              <ProtectedRoute>
+                <AdminLawyerVerification />
+              </ProtectedRoute>
+            )}
+          />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} /> {/* Added ForgotPassword route */}
@@ -161,21 +170,15 @@ function AppContent() {
 
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext'; // Import AuthProvider
-import { GoogleOAuthProvider } from '@react-oauth/google';
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 function App() {
   return (
-  <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
     <Router>
       <Toaster position="bottom-right" />
-        <AuthProvider> {/* Wrap AppContent with AuthProvider */}
-          <AppContent />
-        </AuthProvider>
-      </Router>
-    </GoogleOAuthProvider>
-
+      <AuthProvider> {/* Wrap AppContent with AuthProvider */}
+        <AppContent />
+      </AuthProvider>
+    </Router>
   );
 }
 

@@ -25,14 +25,18 @@ export const AuthProvider = ({ children }) => {
           setUser(response.data);
           setIsAuthenticated(true);
         } catch (error) {
+          // Silently handle error - token might be expired or invalid
           console.error('Failed to load user profile:', error);
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           setUser(null);
           setIsAuthenticated(false);
+        } finally {
+          setLoading(false);
         }
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     loadUser();
