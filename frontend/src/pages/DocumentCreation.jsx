@@ -306,8 +306,29 @@ const DocumentCreation = () => {
     }
   };
 
-  const handleSendMessage = () => {
-    if (!chatMessage.trim() || !ws.current) return;
+  const handleSendMessage = async () => {
+    if (!chatMessage.trim()) return;
+
+    // If no conversation exists yet, create one via API
+    if (!mongoConversationId) {
+      setIsGenerating(true);
+      try {
+        const { data } = await axios.post('/api/documents/conversations/chat/', {
+          message: chatMessage,
+          document_content: finalDocument,
+        });
+        navigate(`/document-creation/${data.conversation_id}`, { replace: true });
+        setChatMessage('');
+      } catch (error) {
+        console.error('Error creating conversation:', error);
+        toast.error('Failed to create document.');
+        setIsGenerating(false);
+      }
+      return;
+    }
+
+    // For existing conversations, use WebSocket
+    if (!ws.current) return;
     const newMsg = { sender: 'user', text: chatMessage };
     setMessages((prev) => [...prev, newMsg]);
     ws.current.send(JSON.stringify({ type: 'chat_message', message: chatMessage, document_content: finalDocument }));
