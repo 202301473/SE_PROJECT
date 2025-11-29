@@ -13,6 +13,7 @@ import ResetPassword from "./pages/ResetPassword"; // Import ResetPassword
 
 import LawyerProfile from "./pages/LawyerProfile";
 import LawyerDashboard from "./pages/LawyerDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 import DocumentAnalyzer from "./pages/DocumentAnalyzer";
 import LawyerConnect from "./pages/LawyerConnect";
 import MyDocuments from "./pages/MyDocuments";
@@ -110,6 +111,14 @@ function AppContent() {
             element={(
               <ProtectedRoute>
                 <LawyerDashboard />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/admin-dashboard"
+            element={(
+              <ProtectedRoute>
+                <AdminDashboard />
               </ProtectedRoute>
             )}
           />

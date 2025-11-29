@@ -1,9 +1,9 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
-    signup_view, 
-    login_view, 
-    google_auth_view, 
+    signup_view,
+    login_view,
+    google_auth_view,
     logout_view,
     verify_otp_view,
     resend_otp_view,
@@ -11,7 +11,11 @@ from .views import (
     forgot_password_view,
     change_password_view,
     add_password_view,
-    reset_password_view
+    reset_password_view,
+    admin_lawyer_list_view,
+    admin_lawyer_verify_view,
+    admin_promote_user_view,
+    admin_create_admin_user_view,
 )
 
 urlpatterns = [
@@ -27,4 +31,9 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('change-password/', change_password_view, name='change_password'),
     path('add-password/', add_password_view, name='add_password'),
+
+    path('admin/lawyers/', admin_lawyer_list_view, name='admin_lawyer_list'),
+    path('admin/lawyers/<str:lawyer_id>/verify/', admin_lawyer_verify_view, name='admin_lawyer_verify'),
+    path('admin/users/promote/', admin_promote_user_view, name='admin_promote_user'),
+    path('admin/users/create-admin/', admin_create_admin_user_view, name='admin_create_admin_user'),
 ]

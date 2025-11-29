@@ -29,6 +29,9 @@ from .serializers import (
     ChangePasswordSerializer,
     AddPasswordSerializer,
     LawyerConnectionStatusSerializer,
+    AdminLawyerVerificationSerializer,
+    AdminPromoteUserSerializer,
+    AdminCreateAdminSerializer,
 )
 from datetime import datetime
 from uuid import uuid4
@@ -798,3 +801,151 @@ def add_password_view(request):
         return Response({"message": "Password added successfully."}, status=status.HTTP_200_OK)
     print("AddPasswordSerializer errors:", serializer.errors) # Debugging line
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+def _require_admin(user):
+    """Helper to ensure the requesting user is an admin/superuser"""
+    if getattr(user, "role", None) == "admin" or getattr(user, "is_superuser", False):
+        return None
+    return Response({"error": "Access denied. Admin privileges required."}, status=status.HTTP_403_FORBIDDEN)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def admin_lawyer_list_view(request):
+    """List lawyers for admin review, optionally filtered by verification status"""
+    access_denied = _require_admin(request.user)
+    if access_denied is not None:
+        return access_denied
+
+    status_filter = request.query_params.get("status", "").strip()
+
+    try:
+        if status_filter in ("pending", "approved", "rejected"):
+            profiles = LawyerProfile.objects(verification_status=status_filter)
+        else:
+            profiles = LawyerProfile.objects()
+    except Exception as e:
+        return Response(
+            {"error": "Failed to load lawyer profiles.", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    serializer = LawyerProfileSerializer(profiles, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def admin_lawyer_verify_view(request, lawyer_id):
+    """Approve or reject a lawyer's verification as an admin"""
+    access_denied = _require_admin(request.user)
+    if access_denied is not None:
+        return access_denied
+
+    serializer = AdminLawyerVerificationSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        lawyer_user = User.objects(id=lawyer_id, role="lawyer").first()
+    except DoesNotExist:
+        lawyer_user = None
+
+    if not lawyer_user:
+        return Response({"error": "Lawyer user not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    profile = LawyerProfile.objects(user=lawyer_user).first()
+    if not profile:
+        return Response({"error": "Lawyer profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    verification_status = serializer.validated_data["verification_status"]
+    verification_notes = serializer.validated_data.get("verification_notes", "").strip()
+
+    profile.verification_status = verification_status
+    profile.verification_notes = verification_notes
+    if verification_status == "approved":
+        profile.verified_at = datetime.utcnow()
+        lawyer_user.is_lawyer_verified = True
+        lawyer_user.lawyer_verification_status = "approved"
+    else:
+        lawyer_user.is_lawyer_verified = False
+        lawyer_user.lawyer_verification_status = "rejected"
+
+    profile.save()
+    lawyer_user.save()
+
+    return Response(
+        {
+            "message": f"Lawyer verification set to {verification_status}.",
+            "profile": LawyerProfileSerializer(profile).data,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def admin_promote_user_view(request):
+    """Promote an existing user (including Google users) to a new role such as admin"""
+    access_denied = _require_admin(request.user)
+    if access_denied is not None:
+        return access_denied
+
+    serializer = AdminPromoteUserSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    email = serializer.validated_data["email"]
+    new_role = serializer.validated_data["role"]
+
+    try:
+        user = User.objects(email=email).first()
+    except DoesNotExist:
+        user = None
+
+    if not user:
+        return Response({"error": "User not found with this email."}, status=status.HTTP_404_NOT_FOUND)
+
+    user.role = new_role
+    # For admins, also mark as staff
+    if new_role == "admin":
+        user.is_staff = True
+    user.save()
+
+    return Response(
+        {
+            "message": f"User role updated to {new_role}.",
+            "user": UserSerializer(user).data,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def admin_create_admin_user_view(request):
+    """Create a brand new admin user in MongoDB so they can log in via the normal login page"""
+    access_denied = _require_admin(request.user)
+    if access_denied is not None:
+        return access_denied
+
+    serializer = AdminCreateAdminSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        admin_user = serializer.save()
+    except Exception as e:
+        return Response(
+            {"error": "Failed to create admin user.", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    return Response(
+        {
+            "message": "Admin user created successfully.",
+            "user": UserSerializer(admin_user).data,
+        },
+        status=status.HTTP_201_CREATED,
+    )
