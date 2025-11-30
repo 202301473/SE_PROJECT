@@ -288,9 +288,11 @@ def login_view(request):
 @permission_classes([AllowAny])
 def google_auth_view(request):
     """Authenticate user with Google OAuth"""
+    print("Google auth view started...")
     try:
         # Validate request data
         if not request.data or not request.data.get("token"):
+            print("Error: Google authentication token is required.")
             return Response(
                 {"error": "Google authentication token is required."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -298,6 +300,7 @@ def google_auth_view(request):
 
         serializer = GoogleAuthSerializer(data=request.data)
         if not serializer.is_valid():
+            print(f"Error: Invalid Google authentication data. Details: {serializer.errors}")
             return Response(
                 {
                     "error": "Invalid Google authentication data.",
@@ -307,86 +310,88 @@ def google_auth_view(request):
             )
 
         token = serializer.validated_data["token"]
+        print(f"Received token: {token[:30]}...") # Log first 30 chars for brevity
 
-        # Verify the token by fetching user info from Google
-        # This works with both access tokens and ID tokens
+        # The token from the frontend is an Access Token.
+        # We use it to get the user's info from Google's userinfo endpoint.
+        print("Verifying token with Google's userinfo endpoint...")
         headers = {"Authorization": f"Bearer {token}"}
         response = http_requests.get(
             "https://www.googleapis.com/oauth2/v3/userinfo", headers=headers, timeout=10
         )
-
+        
         if response.status_code != 200:
-            # If access token fails, try to verify as ID token
-            if settings.GOOGLE_CLIENT_ID:
-                try:
-                    idinfo = id_token.verify_oauth2_token(
-                        token, requests.Request(), settings.GOOGLE_CLIENT_ID
-                    )
-                    user_info = idinfo
-                except Exception as e:
-                    return Response(
-                        {"error": "Invalid Google token", "details": str(e)},
-                        status=status.HTTP_401_UNAUTHORIZED,
-                    )
-            else:
-                return Response(
-                    {
-                        "error": "Failed to verify Google token",
-                        "details": response.text,
-                    },
-                    status=status.HTTP_401_UNAUTHORIZED,
-                )
-        else:
-            user_info = response.json()
+            print(f"Error: Google userinfo endpoint failed. Status: {response.status_code}, Body: {response.text}")
+            return Response(
+                {
+                    "error": "Failed to retrieve user information from Google.",
+                    "details": response.text,
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        user_info = response.json()
+        print("Userinfo endpoint successful.")
 
         # Get user info from Google response
         email = user_info.get("email")
         google_id = user_info.get("sub")
         name = user_info.get("name", "")
+        print(f"User info retrieved: email={email}, name={name}, google_id={google_id}")
 
         if not email:
+            print("Error: Email not provided by Google.")
             return Response(
                 {"error": "Email not provided by Google"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check if user exists
-        user = None
+        # Check if user exists, or create a new one
         try:
             user = User.objects(email=email).first()
             if user:
-                # Update Google ID if not set
+                print(f"User found with email {email}.")
+                # Update user details if they've changed
                 if not user.google_id:
                     user.google_id = google_id
+                if user.auth_provider != "google":
                     user.auth_provider = "google"
-                    user.is_verified = True  # Google users are auto-verified
-                    user.save()
-        except DoesNotExist:
-            user = None
+                user.is_verified = True  # Google users are always considered verified
+                user.save()
+            else:
+                print(f"No user found with email {email}. Creating a new user.")
+                username = email.split("@")[0]
+                # Ensure username is unique
+                base_username = username
+                counter = 1
+                while User.objects(username=username).first():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                
+                user = User.create_user(
+                    email=email,
+                    username=username,
+                    name=name,
+                    google_id=google_id,
+                    auth_provider="google",
+                    password="!",  # Set an unusable password for OAuth users
+                )
+                user.is_verified = True
+                user.save()
+                print("New user created successfully.")
 
-        if not user:
-            # Create new user
-            username = email.split("@")[0]
-            # Ensure username is unique
-            base_username = username
-            counter = 1
-            while User.objects(username=username).first():
-                username = f"{base_username}{counter}"
-                counter += 1
-
-            user = User.create_user(
-                email=email,
-                username=username,
-                name=name,
-                google_id=google_id,
-                auth_provider="google",
-                password="!",  # Unusable password for OAuth users
+        except Exception as e:
+             print(f"Database error during user lookup/creation: {str(e)}")
+             return Response(
+                {"error": "An error occurred while processing your account.", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-            user.is_verified = True  # Google users are auto-verified
-            user.save()
 
+        # Generate JWT tokens for the user
+        print("Generating tokens for the user.")
         tokens = get_tokens_for_user(user)
         user_data = UserSerializer(user).data
+        print("Google authentication successful. Returning response.")
 
         return Response(
             {
@@ -399,11 +404,13 @@ def google_auth_view(request):
         )
 
     except http_requests.exceptions.Timeout:
+        print("Error: Google authentication timed out.")
         return Response(
             {"error": "Google authentication timed out. Please try again."},
             status=status.HTTP_504_GATEWAY_TIMEOUT,
         )
     except http_requests.exceptions.ConnectionError:
+        print("Error: Unable to connect to Google services.")
         return Response(
             {
                 "error": "Unable to connect to Google services. Please check your internet connection."
@@ -411,6 +418,7 @@ def google_auth_view(request):
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
     except http_requests.exceptions.RequestException as e:
+        print(f"Error: Failed to communicate with Google services. Details: {str(e)}")
         return Response(
             {
                 "error": "Failed to communicate with Google services. Please try again.",
@@ -419,6 +427,9 @@ def google_auth_view(request):
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
     except Exception as e:
+        print(f"An unexpected error occurred in google_auth_view: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return Response(
             {
                 "error": "Google authentication failed. Please try again.",

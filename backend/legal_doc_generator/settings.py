@@ -26,6 +26,9 @@ import mongoengine
 MONGO_URI = os.getenv("MONGO_URI")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "legal_document_navigator_db")
 
+# Print the MONGO_URI to verify it's loaded correctly
+print(f"Attempting to connect to MongoDB with URI: {MONGO_URI}")
+
 if not MONGO_URI:
     raise ValueError("❌ MONGO_URI environment variable is not set. Please configure it in your .env file.")
 
@@ -45,7 +48,8 @@ try:
     )
     print(f"✅ MongoDB connected successfully: {MONGO_DB_NAME}")
 except Exception as e:
-    print(f"❌ Failed to connect to MongoDB: {e}")
+    print(f"❌ Failed to connect to MongoDB. Please ensure that the MONGO_URI is correct and that the MongoDB server is running.")
+    print(f"Error details: {e}")
     raise
 
 
@@ -114,6 +118,7 @@ INSTALLED_APPS = [
 SITE_ID = 1
 
 MIDDLEWARE = [
+    'authentication.middleware.CrossOriginOpenerPolicyMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',

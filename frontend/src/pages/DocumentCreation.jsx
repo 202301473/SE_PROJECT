@@ -161,11 +161,18 @@ const DocumentCreation = () => {
       } else if (data.type === 'chat_complete') {
         setIsGenerating(false);
         if (data.updated_document_content) setFinalDocument(data.updated_document_content);
+      } else if (data.type === 'chat_error') {
+        setIsGenerating(false);
+        toast.error(`An error occurred: ${data.error}`);
       } else if (data.type === 'document_content_change') {
         if (data.content !== finalDocument) setFinalDocument(data.content);
       }
     };
-    newWs.onerror = (error) => console.error('WebSocket error:', error);
+    newWs.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      toast.error('WebSocket connection error. Please refresh the page.');
+      setIsGenerating(false);
+    };
     return () => newWs.close();
   }, [mongoConversationId, editor, finalDocument]);
 

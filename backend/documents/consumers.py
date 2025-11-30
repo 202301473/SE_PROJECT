@@ -77,17 +77,27 @@ class DocumentConsumer(AsyncWebsocketConsumer):
                     'chunk': chunk
                 }))
             
-            # 2. Process the full response (extract JSON if present)
-            ai_response_content = ""
-            if '```json' in full_ai_response:
-                try:
+            # 2. Process the full response (extract document text from JSON if present)
+            ai_response_content = full_ai_response # Default to conversational text
+            parsed_json = None
+            
+            try:
+                if '```json' in full_ai_response:
                     json_str = full_ai_response.split('```json')[1].split('```')[0]
-                    document_data = json.loads(json_str)
-                    ai_response_content = document_data.get('text', '')
-                except:
-                    ai_response_content = full_ai_response # Fallback
-            else:
-                ai_response_content = full_ai_response
+                    parsed_json = json.loads(json_str)
+                else:
+                    # If no markdown block, try to parse the whole string.
+                    # This is risky but can handle cases where the LLM forgets the block.
+                    parsed_json = json.loads(full_ai_response)
+            except (json.JSONDecodeError, IndexError):
+                # This happens if the response is not valid JSON or doesn't have the ```json block.
+                # In this case, we assume it's a conversational message or raw markdown.
+                pass
+
+            if parsed_json and parsed_json.get('type') == 'document' and 'text' in parsed_json:
+                # We got the specific document JSON we asked for.
+                ai_response_content = parsed_json['text']
+            # Otherwise, ai_response_content remains the full_ai_response, which is treated as markdown/text.
 
             # 3. Update the conversation in the database
             await self.save_conversation_update(user_message, full_ai_response, ai_response_content)
