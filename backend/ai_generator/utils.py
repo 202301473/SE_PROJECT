@@ -20,9 +20,9 @@ def get_gemini_response(user_message, document_context=""):
     - **Emphasis:** Use bold (`**text**`) for important terms and italics (`*text*`) for emphasis.
     - **Section Separation:** Use two newlines between sections to ensure clear visual separation.
     - **Placeholders:** For any information not provided by the user, use clear, descriptive placeholders in `[CAPITALIZED_SNAKE_CASE]` format (e.g., `[PARTY 1 NAME]`, `[EFFECTIVE DATE]`, `[AMOUNT IN WORDS]`).
-- When you are ready to generate the document, provide it in a JSON format like this: ```json{"type": "document", "text": "...your Markdown document here..."}```.
+- When you are ready to generate the document, just provide the full Markdown content of the document. Do not wrap it in JSON.
 - If the user asks to update some information, you must look for the previous document you generated in the conversation history. You will use that document as the basis for your new version.
-- You must then regenerate the **entire** document, incorporating the user's requested changes, and provide it again in the same JSON format. Do not just provide the updated line or a confirmation message.
+- You must then regenerate the **entire** document, incorporating the user's requested changes, and provide the full updated Markdown. Do not just provide the updated line or a confirmation message.
 - **Signature Handling:** If the user uploads a signature, you will see a system message like `(System: The user has uploaded a signature...)` with a URL. When you generate the document, you **must** include this signature at the appropriate signature lines using the provided URL in the correct markdown format: `![Signature]({signature_url})`. **Do NOT acknowledge the system message about the signature upload in your conversational response.**
 """
     
@@ -77,9 +77,9 @@ def get_gemini_response(user_message, document_context=""):
     - **Emphasis:** Use bold (`**text**`) for important terms and italics (`*text*`) for emphasis.
     - **Section Separation:** Use two newlines between sections to ensure clear visual separation.
     - **Placeholders:** For any information not provided by the user, use clear, descriptive placeholders in `[CAPITALIZED_SNAKE_CASE]` format (e.g., `[PARTY 1 NAME]`, `[EFFECTIVE DATE]`, `[AMOUNT IN WORDS]`).
-- When you are ready to generate the document, provide it in a JSON format like this: ```json{"type": "document", "text": "...your Markdown document here..."}```.
+- When you are ready to generate the document, just provide the full Markdown content of the document. Do not wrap it in JSON.
 - If the user asks to update some information, you must look for the previous document you generated in the conversation history. You will use that document as the basis for your new version.
-- You must then regenerate the **entire** document, incorporating the user's requested changes, and provide it again in the same JSON format. Do not just provide the updated line or a confirmation message.
+- You must then regenerate the **entire** document, incorporating the user's requested changes, and provide the full updated Markdown. Do not just provide the updated line or a confirmation message.
 - **Signature Handling:** If the user uploads a signature, you will see a system message like `(System: The user has uploaded a signature...)` with a URL. When you generate the document, you **must** include this signature at the appropriate signature lines using the provided URL in the correct markdown format: `![Signature]({signature_url})`. **Do NOT acknowledge the system message about the signature upload in your conversational response.**
 """
     
@@ -143,9 +143,9 @@ def get_gemini_response_stream(user_message, document_context=""):
     - **Emphasis:** Use bold (`**text**`) for important terms and italics (`*text*`) for emphasis.
     - **Section Separation:** Use two newlines between sections to ensure clear visual separation.
     - **Placeholders:** For any information not provided by the user, use clear, descriptive placeholders in `[CAPITALIZED_SNAKE_CASE]` format (e.g., `[PARTY 1 NAME]`, `[EFFECTIVE DATE]`, `[AMOUNT IN WORDS]`).
-- When you are ready to generate the document, provide it in a JSON format like this: ```json{"type": "document", "text": "...your Markdown document here..."}```.
+- When you are ready to generate the document, just provide the full Markdown content of the document. Do not wrap it in JSON.
 - If the user asks to update some information, you must look for the previous document you generated in the conversation history. You will use that document as the basis for your new version.
-- You must then regenerate the **entire** document, incorporating the user's requested changes, and provide it again in the same JSON format. Do not just provide the updated line or a confirmation message.
+- You must then regenerate the **entire** document, incorporating the user's requested changes, and provide the full updated Markdown. Do not just provide the updated line or a confirmation message.
 - **Signature Handling:** If the user uploads a signature, you will see a system message like `(System: The user has uploaded a signature...)` with a URL. When you generate the document, you **must** include this signature at the appropriate signature lines using the provided URL in the correct markdown format: `![Signature]({signature_url})`. **Do NOT acknowledge the system message about the signature upload in your conversational response.**
 """
     

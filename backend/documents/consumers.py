@@ -77,30 +77,8 @@ class DocumentConsumer(AsyncWebsocketConsumer):
                     'chunk': chunk
                 }))
             
-            # 2. Process the full response (extract document text from JSON if present)
-            ai_response_content = full_ai_response # Default to conversational text
-            
-            try:
-                # Find the JSON part of the response, whether it's in a markdown block or not
-                json_str = None
-                if '```json' in full_ai_response:
-                    json_str = full_ai_response.split('```json')[1].split('```')[0].strip()
-                else:
-                    # Find the first '{' and the last '}'
-                    start = full_ai_response.find('{')
-                    end = full_ai_response.rfind('}')
-                    if start != -1 and end != -1 and end > start:
-                        json_str = full_ai_response[start:end+1]
-
-                if json_str:
-                    parsed_json = json.loads(json_str)
-                    if parsed_json.get('type') == 'document' and 'text' in parsed_json:
-                        # We found the specific document JSON we asked for.
-                        ai_response_content = parsed_json['text']
-            except (json.JSONDecodeError, IndexError, AttributeError):
-                # If parsing fails at any point, we fall back to the default,
-                # which is to treat the whole response as a text/markdown message.
-                pass
+            # 2. The full response is now assumed to be the document or a conversational message.
+            ai_response_content = full_ai_response
 
             # 3. Update the conversation in the database
             await self.save_conversation_update(user_message, full_ai_response, ai_response_content)

@@ -159,8 +159,12 @@ const DocumentCreation = () => {
           return [...prev, { sender: 'bot', text: data.chunk }];
         });
       } else if (data.type === 'chat_complete') {
+        console.log("Received chat_complete. Setting isGenerating to false.");
         setIsGenerating(false);
-        if (data.updated_document_content) setFinalDocument(data.updated_document_content);
+        if (data.updated_document_content) {
+          console.log("Updating final document with new content.");
+          setFinalDocument(data.updated_document_content);
+        }
       } else if (data.type === 'chat_error') {
         setIsGenerating(false);
         toast.error(`An error occurred: ${data.error}`);
@@ -499,13 +503,11 @@ const DocumentCreation = () => {
       {/* Left Sidebar - Chat History */}
       <div
         className={`
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:w-64 lg:w-80 md:relative md:translate-x-0
+          ${sidebarOpen ? 'w-3/4 max-w-xs md:w-64 lg:w-80' : 'w-0 overflow-hidden'}
           transition-all duration-300 ease-in-out
-          fixed top-[var(--navbar-height)] bottom-0 left-0 z-[70] lg:relative lg:top-0 lg:z-10
+          relative
           bg-card border-r border-border/50
-          flex flex-col overflow-hidden h-full w-3/4 max-w-xs
-          lg:flex-shrink-0
+          flex flex-col h-full flex-shrink-0
         `}
       >
         <div className="p-4 border-b border-border/10">
