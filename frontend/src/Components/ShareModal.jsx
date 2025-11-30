@@ -195,8 +195,8 @@ const ShareModal = ({ documentId, documentTitle, onClose, initialSharedWithUsers
           {/* Share with Specific Users Section */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-foreground">Share with People</h3>
-            <div className="flex gap-2 relative">
-              <div className="flex-1 relative">
+            <div className="flex flex-col gap-2">
+              <div className="relative w-full">
                 <Input
                   type="text"
                   placeholder="Enter username..."
@@ -205,7 +205,7 @@ const ShareModal = ({ documentId, documentTitle, onClose, initialSharedWithUsers
                   onFocus={() => usernameToShare.length >= 2 && setShowUserDropdown(true)}
                   onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
                   disabled={loading}
-                  className="bg-background/50 border-border/50"
+                  className="bg-background/50 border-border/50 w-full"
                 />
                 {showUserDropdown && availableUsers.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-card border border-border/50 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -227,18 +227,20 @@ const ShareModal = ({ documentId, documentTitle, onClose, initialSharedWithUsers
                   </div>
                 )}
               </div>
-              <Select value={userPermissionLevel} onValueChange={setUserPermissionLevel} disabled={loading}>
-                <SelectTrigger className="w-[100px] bg-background/50 border-border/50">
-                  <SelectValue placeholder="Access" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="view">View</SelectItem>
-                  <SelectItem value="edit">Edit</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button onClick={handleShareWithUser} disabled={loading || !usernameToShare.trim()} className="bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-md">
-                <UserPlus className="w-4 h-4" />
-              </Button>
+              <div className="flex gap-2 justify-end">
+                <Select value={userPermissionLevel} onValueChange={setUserPermissionLevel} disabled={loading}>
+                  <SelectTrigger className="w-[120px] bg-background/50 border-border/50">
+                    <SelectValue placeholder="Access" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="view">View</SelectItem>
+                    <SelectItem value="edit">Edit</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleShareWithUser} disabled={loading || !usernameToShare.trim()} className="bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-md">
+                  <UserPlus className="w-4 h-4 mr-2" /> Share
+                </Button>
+              </div>
             </div>
 
             {/* List of Shared Users */}
