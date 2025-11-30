@@ -310,7 +310,9 @@ def google_auth_view(request):
             )
 
         token = serializer.validated_data["token"]
+        role = serializer.validated_data.get("role", "client")
         print(f"Received token: {token[:30]}...") # Log first 30 chars for brevity
+        print(f"DEBUG: Received role from frontend: {role}")
 
         # The token from the frontend is an Access Token.
         # We use it to get the user's info from Google's userinfo endpoint.
@@ -350,16 +352,25 @@ def google_auth_view(request):
         try:
             user = User.objects(email=email).first()
             if user:
-                print(f"User found with email {email}.")
+                print(f"User found with email {email}. Current role: {user.role}")
                 # Update user details if they've changed
                 if not user.google_id:
                     user.google_id = google_id
                 if user.auth_provider != "google":
                     user.auth_provider = "google"
                 user.is_verified = True  # Google users are always considered verified
+                
+                # Update role if provided (Aggressive update for onboarding fix)
+                if role == 'lawyer' and user.role != 'admin':
+                    print(f"DEBUG: Enforcing lawyer role for user {email}")
+                    user.role = 'lawyer'
+                    # Only reset verification if they weren't already verified
+                    if not user.is_lawyer_verified:
+                         user.lawyer_verification_status = 'pending'
+                
                 user.save()
             else:
-                print(f"No user found with email {email}. Creating a new user.")
+                print(f"No user found with email {email}. Creating a new user with role: {role}")
                 username = email.split("@")[0]
                 # Ensure username is unique
                 base_username = username
@@ -375,6 +386,7 @@ def google_auth_view(request):
                     google_id=google_id,
                     auth_provider="google",
                     password="!",  # Set an unusable password for OAuth users
+                    role=role,
                 )
                 user.is_verified = True
                 user.save()
@@ -395,11 +407,13 @@ def google_auth_view(request):
             if not lawyer_profile or lawyer_profile.verification_status == 'not_submitted':
                 # Return a special response to signal frontend to show onboarding modal
                 print(f"Lawyer {user.email} needs to complete profile.")
+                tokens = get_tokens_for_user(user) # Generate tokens here
                 return Response(
                     {
                         "message": "Lawyer profile incomplete. Please provide more details.",
                         "requires_lawyer_onboarding": True,
                         "user": UserSerializer(user).data, # Send basic user data
+                        "tokens": tokens, # Send tokens so frontend can authenticate for profile completion
                     },
                     status=status.HTTP_202_ACCEPTED, # 202 Accepted, indicates processing is ongoing
                 )

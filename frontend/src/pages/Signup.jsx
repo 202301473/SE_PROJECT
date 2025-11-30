@@ -7,6 +7,15 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/Input";
 import { Label } from "@/Components/ui/Label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/Components/ui/dialog";
 
 const Signup = () => {
 const navigate = useNavigate();
@@ -31,18 +40,21 @@ const { setUser, setIsAuthenticated } = useAuth();
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [isLawyerModalOpen, setIsLawyerModalOpen] = useState(false); // New state for modal
+  const [isGoogleOnboarding, setIsGoogleOnboarding] = useState(false); // New state for Google lawyer onboarding
+  const [googleAccessToken, setGoogleAccessToken] = useState(null); // To store token for subsequent calls
 
-  const validateForm = () => {
+  const validateForm = (isLawyerStep = false) => { // Modified to accept isLawyerStep
     const newErrors = {};
 
-    // Name validation
+    // Name validation (always required)
     if (!formData.name.trim()) {
       newErrors.name = 'Name is required';
     } else if (!/^[a-zA-Z\s]+$/.test(formData.name.trim())) {
       newErrors.name = 'Name can only contain letters and spaces';
     }
 
-    // Email validation with trimming
+    // Email validation with trimming (always required)
     const trimmedEmail = formData.email.trim();
     if (!trimmedEmail) {
       newErrors.email = 'Email is required';
@@ -52,7 +64,7 @@ const { setUser, setIsAuthenticated } = useAuth();
       newErrors.email = 'Please enter a valid email address';
     }
 
-    // Username validation - allow numbers, disallow only special characters or only numbers
+    // Username validation (always required)
     if (!formData.username.trim()) {
       newErrors.username = 'Username is required';
     } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
@@ -63,38 +75,40 @@ const { setUser, setIsAuthenticated } = useAuth();
       newErrors.username = 'Invalid username. Must contain at least one letter';
     }
 
-    // Password validation
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else {
-      const passwordErrors = [];
-      
-      if (formData.password.length < 8) {
-        passwordErrors.push('at least 8 characters');
+    // Password validation (always required, unless Google onboarding)
+    if (!isGoogleOnboarding) { // Passwords not required for Google initial signup
+      if (!formData.password) {
+        newErrors.password = 'Password is required';
+      } else {
+        const passwordErrors = [];
+        
+        if (formData.password.length < 8) {
+          passwordErrors.push('at least 8 characters');
+        }
+        if (!/[A-Z]/.test(formData.password)) {
+          passwordErrors.push('one uppercase letter');
+        }
+        if (!/[a-z]/.test(formData.password)) {
+          passwordErrors.push('one lowercase letter');
+        }
+        if (!/[0-9]/.test(formData.password)) {
+          passwordErrors.push('one number');
+        }
+        if (!/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]/.test(formData.password)) {
+          passwordErrors.push('one special character');
+        }
+        
+        if (passwordErrors.length > 0) {
+          newErrors.password = `Password must contain ${passwordErrors.join(', ')}`;
+        }
       }
-      if (!/[A-Z]/.test(formData.password)) {
-        passwordErrors.push('one uppercase letter');
-      }
-      if (!/[a-z]/.test(formData.password)) {
-        passwordErrors.push('one lowercase letter');
-      }
-      if (!/[0-9]/.test(formData.password)) {
-        passwordErrors.push('one number');
-      }
-      if (!/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]/.test(formData.password)) {
-        passwordErrors.push('one special character');
-      }
-      
-      if (passwordErrors.length > 0) {
-        newErrors.password = `Password must contain ${passwordErrors.join(', ')}`;
+
+      if (formData.password !== formData.password2) {
+        newErrors.password2 = 'Passwords do not match';
       }
     }
 
-    if (formData.password !== formData.password2) {
-      newErrors.password2 = 'Passwords do not match';
-    }
-
-    // Phone validation - only numbers allowed
+    // Phone validation - only numbers allowed (always optional)
     if (formData.phone && formData.phone.trim()) {
       const phoneDigits = formData.phone.replace(/[\s-+()]/g, '');
       if (!/^[0-9]+$/.test(phoneDigits)) {
@@ -104,8 +118,8 @@ const { setUser, setIsAuthenticated } = useAuth();
       }
     }
 
-    // Lawyer-specific validation
-    if (accountType === 'lawyer') {
+    // Lawyer-specific validation, only if isLawyerStep is true
+    if (accountType === 'lawyer' && isLawyerStep) {
       if (!formData.license_number.trim()) {
         newErrors.license_number = 'License Number is required for lawyers';
       } else if (/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]/.test(formData.license_number)) {
@@ -162,23 +176,26 @@ const { setUser, setIsAuthenticated } = useAuth();
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // Validate form before submission
-    if (!validateForm()) {
-      return;
-    }
-
+  const handleFinalSubmit = async () => { // Renamed from handleSubmit
     setLoading(true);
     setErrors({});
 
     try {
+      let response;
+      const headers = {};
+
       const payload = {
         ...formData,
         role: accountType,
       };
 
+      // Only include password fields if not Google onboarding
+      if (isGoogleOnboarding) {
+        delete payload.password;
+        delete payload.password2;
+        headers['Authorization'] = `Bearer ${googleAccessToken}`;
+      }
+      
       if (accountType === 'lawyer') {
         payload.experience_years = formData.experience_years ? Number(formData.experience_years) : 0;
         payload.specializations = formData.specializations
@@ -201,7 +218,14 @@ const { setUser, setIsAuthenticated } = useAuth();
         ].forEach((field) => delete payload[field]);
       }
 
-      const response = await axios.post('/api/auth/signup/', payload);
+      if (isGoogleOnboarding) {
+        // Submit to lawyer profile completion endpoint
+        response = await axios.post('/api/auth/lawyer-profile-complete/', payload, { headers });
+      } else {
+        // Submit to regular signup endpoint
+        response = await axios.post('/api/auth/signup/', payload);
+      }
+      
       toast.success(response.data.message);
       
       if (response.data.requires_verification) {
@@ -210,7 +234,7 @@ const { setUser, setIsAuthenticated } = useAuth();
         navigate('/login');
       }
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('Submission error:', error);
       
       if (error.response) {
         const data = error.response.data;
@@ -238,7 +262,7 @@ const { setUser, setIsAuthenticated } = useAuth();
         }
         
         // Handle general error messages
-        let message = 'Signup failed. Please try again.';
+        let message = 'Submission failed. Please try again.';
         if (typeof data === 'string') {
           message = data;
         } else if (data?.error) {
@@ -255,11 +279,27 @@ const { setUser, setIsAuthenticated } = useAuth();
       }
     } finally {
       setLoading(false);
+      setIsLawyerModalOpen(false); // Close modal on completion/error
+      setIsGoogleOnboarding(false); // Reset Google onboarding state
+    }
+  };
+
+  const handleSubmit = (e) => { // New handler for initial form submission
+    e.preventDefault();
+    if (!validateForm(isLawyerModalOpen)) { // Validate basic fields first, or all fields if modal is open
+      return;
+    }
+
+    if (accountType === 'lawyer' && !isLawyerModalOpen) {
+      setIsLawyerModalOpen(true); // Open modal for lawyer details
+    } else {
+      handleFinalSubmit(); // Directly submit for client, or from modal
     }
   };
 
   const handleGoogleSignup = async (tokenData) => {
     setLoading(true);
+    console.log("DEBUG: handleGoogleSignup started. Selected Role:", accountType);
     try {
       if (!tokenData || !tokenData.credential) {
         toast.error('Google authentication failed. Please try again.');
@@ -267,7 +307,10 @@ const { setUser, setIsAuthenticated } = useAuth();
       }
       
       console.log('Sending token to backend:', tokenData);
-      const response = await axios.post('/api/auth/google/', { token: tokenData.credential });
+      const response = await axios.post('/api/auth/google/', { 
+        token: tokenData.credential,
+        role: accountType // Send selected role to backend
+      });
       
       console.log('Backend response:', response.data);
       
@@ -279,7 +322,17 @@ const { setUser, setIsAuthenticated } = useAuth();
       setIsAuthenticated(true);
       
       toast.success(response.data.message || 'Signup successful!');
-      navigate('/');
+      
+      // If the user is a lawyer and needs to complete their profile (from google auth flow)
+      if (response.data.requires_lawyer_onboarding) {
+        setGoogleAccessToken(access); // Save the access token for profile completion
+        setIsGoogleOnboarding(true); // Indicate that we are in Google onboarding flow
+        setAccountType('lawyer'); // Force account type to lawyer so payload is constructed correctly
+        setIsLawyerModalOpen(true);  // Open the modal
+      } else {
+        navigate('/'); // Redirect to home for clients or completed lawyers
+      }
+      
     } catch (error) {
       console.error('Google signup error:', error);
       
@@ -513,163 +566,6 @@ const { setUser, setIsAuthenticated } = useAuth();
             )}
           </div>
 
-          {accountType === 'lawyer' && (
-            <div className="space-y-6 border border-border/60 rounded-xl p-4 bg-card/40">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Professional Information</h2>
-                <p className="text-xs text-muted-foreground">
-                  Provide accurate information so our team can verify your credentials.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="license_number" className="text-foreground font-medium">License Number *</Label>
-                  <Input
-                    id="license_number"
-                    name="license_number"
-                    placeholder="State Bar License Number"
-                    required={accountType === 'lawyer'}
-                    value={formData.license_number}
-                    onChange={handleInputChange}
-                    disabled={loading}
-                    className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.license_number ? 'border-red-500' : ''}`}
-                  />
-                  {errors.license_number && (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
-                      <p className="text-xs text-red-600 dark:text-red-400">{errors.license_number}</p>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="bar_council_id" className="text-foreground font-medium">Bar Council ID *</Label>
-                  <Input
-                    id="bar_council_id"
-                    name="bar_council_id"
-                    placeholder="Bar Council Registration ID"
-                    required={accountType === 'lawyer'}
-                    value={formData.bar_council_id}
-                    onChange={handleInputChange}
-                    disabled={loading}
-                    className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.bar_council_id ? 'border-red-500' : ''}`}
-                  />
-                  {errors.bar_council_id && (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
-                      <p className="text-xs text-red-600 dark:text-red-400">{errors.bar_council_id}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="education" className="text-foreground font-medium">Education *</Label>
-                  <Input
-                    id="education"
-                    name="education"
-                    placeholder="LLB, LLM..."
-                    required={accountType === 'lawyer'}
-                    value={formData.education}
-                    onChange={handleInputChange}
-                    disabled={loading}
-                    className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.education ? 'border-red-500' : ''}`}
-                  />
-                  {errors.education && (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
-                      <p className="text-xs text-red-600 dark:text-red-400">{errors.education}</p>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="experience_years" className="text-foreground font-medium">Years of Experience</Label>
-                  <Input
-                    id="experience_years"
-                    name="experience_years"
-                    type="number"
-                    min="0"
-                    placeholder="e.g. 5"
-                    value={formData.experience_years}
-                    onChange={handleInputChange}
-                    disabled={loading}
-                    className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="law_firm" className="text-foreground font-medium">Law Firm / Practice</Label>
-                  <Input
-                    id="law_firm"
-                    name="law_firm"
-                    placeholder="Firm name or Independent"
-                    value={formData.law_firm}
-                    onChange={handleInputChange}
-                    disabled={loading}
-                    className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.law_firm ? 'border-red-500' : ''}`}
-                  />
-                  {errors.law_firm && (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
-                      <p className="text-xs text-red-600 dark:text-red-400">{errors.law_firm}</p>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="consultation_fee" className="text-foreground font-medium">Consultation Fee</Label>
-                  <Input
-                    id="consultation_fee"
-                    name="consultation_fee"
-                    placeholder="e.g. ₹1500/hour"
-                    value={formData.consultation_fee}
-                    onChange={handleInputChange}
-                    disabled={loading}
-                    className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="specializations" className="text-foreground font-medium">Specializations</Label>
-                <Input
-                  id="specializations"
-                  name="specializations"
-                  placeholder="Separate with commas e.g. Corporate Law, Family Law"
-                  value={formData.specializations}
-                  onChange={handleInputChange}
-                  disabled={loading}
-                  className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="bio" className="text-foreground font-medium">Professional Bio</Label>
-                <textarea
-                  id="bio"
-                  name="bio"
-                  rows="4"
-                  placeholder="Describe your experience, notable cases, or approach to clients."
-                  value={formData.bio}
-                  onChange={handleInputChange}
-                  disabled={loading}
-                  className="w-full rounded-md border border-border/50 bg-input text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 p-3"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="verification_documents" className="text-foreground font-medium">Verification Documents</Label>
-                <Input
-                  id="verification_documents"
-                  name="verification_documents"
-                  placeholder="Links to certifications or proofs (comma separated URLs)"
-                  value={formData.verification_documents}
-                  onChange={handleInputChange}
-                  disabled={loading}
-                  className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
-                />
-              </div>
-            </div>
-          )}
-
           <Button 
             type="submit" 
             className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-foreground shadow-lg shadow-primary/50 hover:shadow-xl hover:shadow-primary/60 transition-all duration-300" 
@@ -686,6 +582,181 @@ const { setUser, setIsAuthenticated } = useAuth();
           </Link>
         </div>
       </div>
+
+      {/* Lawyer Details Modal */}
+      <Dialog open={isLawyerModalOpen} onOpenChange={setIsLawyerModalOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold">Complete Your Lawyer Profile</DialogTitle>
+            <DialogDescription>
+              Please provide the following details to complete your lawyer registration.
+              Our team will review your credentials for verification.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); handleFinalSubmit(); }} className="space-y-6 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground mb-2">Professional Information</h2>
+              <p className="text-xs text-muted-foreground">
+                Provide accurate information so our team can verify your credentials.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="license_number" className="text-foreground font-medium">License Number *</Label>
+                <Input
+                  id="license_number"
+                  name="license_number"
+                  placeholder="State Bar License Number"
+                  required
+                  value={formData.license_number}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.license_number ? 'border-red-500' : ''}`}
+                />
+                {errors.license_number && (
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
+                    <p className="text-xs text-red-600 dark:text-red-400">{errors.license_number}</p>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bar_council_id" className="text-foreground font-medium">Bar Council ID *</Label>
+                <Input
+                  id="bar_council_id"
+                  name="bar_council_id"
+                  placeholder="Bar Council Registration ID"
+                  required
+                  value={formData.bar_council_id}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.bar_council_id ? 'border-red-500' : ''}`}
+                />
+                {errors.bar_council_id && (
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-800 rounded-lg p-2 mt-1">
+                    <p className="text-xs text-red-600 dark:text-red-400">{errors.bar_council_id}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="education" className="text-foreground font-medium">Education *</Label>
+                <Input
+                  id="education"
+                  name="education"
+                  placeholder="LLB, LLM..."
+                  required
+                  value={formData.education}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.education ? 'border-red-500' : ''}`}
+                />
+                {errors.education && (
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
+                    <p className="text-xs text-red-600 dark:text-red-400">{errors.education}</p>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="experience_years" className="text-foreground font-medium">Years of Experience</Label>
+                <Input
+                  id="experience_years"
+                  name="experience_years"
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 5"
+                  value={formData.experience_years}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="law_firm" className="text-foreground font-medium">Law Firm / Practice</Label>
+                <Input
+                  id="law_firm"
+                  name="law_firm"
+                  placeholder="Firm name or Independent"
+                  value={formData.law_firm}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.law_firm ? 'border-red-500' : ''}`}
+                />
+                {errors.law_firm && (
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
+                    <p className="text-xs text-red-600 dark:text-red-400">{errors.law_firm}</p>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="consultation_fee" className="text-foreground font-medium">Consultation Fee</Label>
+                <Input
+                  id="consultation_fee"
+                  name="consultation_fee"
+                  placeholder="e.g. ₹1500/hour"
+                  value={formData.consultation_fee}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="specializations" className="text-foreground font-medium">Specializations</Label>
+              <Input
+                id="specializations"
+                name="specializations"
+                placeholder="Separate with commas e.g. Corporate Law, Family Law"
+                value={formData.specializations}
+                onChange={handleInputChange}
+                disabled={loading}
+                className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="bio" className="text-foreground font-medium">Professional Bio</Label>
+              <textarea
+                id="bio"
+                name="bio"
+                rows="4"
+                placeholder="Describe your experience, notable cases, or approach to clients."
+                value={formData.bio}
+                onChange={handleInputChange}
+                disabled={loading}
+                className="w-full rounded-md border border-border/50 bg-input text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 p-3"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="verification_documents" className="text-foreground font-medium">Verification Documents</Label>
+              <Input
+                id="verification_documents"
+                name="verification_documents"
+                placeholder="Links to certifications or proofs (comma separated URLs)"
+                value={formData.verification_documents}
+                onChange={handleInputChange}
+                disabled={loading}
+                className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsLawyerModalOpen(false)} disabled={loading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? 'Submitting...' : 'Complete Registration'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

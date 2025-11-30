@@ -328,6 +328,7 @@ class LoginSerializer(serializers.Serializer):
 
 class GoogleAuthSerializer(serializers.Serializer):
     token = serializers.CharField(required=True)
+    role = serializers.CharField(required=False, default="client")
 
 
 class VerifyOTPSerializer(serializers.Serializer):
@@ -364,19 +365,53 @@ class LawyerProfileSerializer(serializers.Serializer):
 
     id = serializers.CharField(read_only=True)
     user = UserSerializer(read_only=True)
-    phone = serializers.CharField(read_only=True)
-    education = serializers.CharField(read_only=True)
-    experience_years = serializers.IntegerField(read_only=True)
-    law_firm = serializers.CharField(read_only=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
+    education = serializers.CharField(required=False, allow_blank=True)
+    experience_years = serializers.IntegerField(required=False, min_value=0)
+    law_firm = serializers.CharField(required=False, allow_blank=True)
     specializations = serializers.ListField(
-        child=serializers.CharField(), read_only=True
+        child=serializers.CharField(), required=False, allow_empty=True
     )
-    license_number = serializers.CharField(read_only=True)
-    bar_council_id = serializers.CharField(read_only=True)
-    consultation_fee = serializers.CharField(read_only=True)
-    bio = serializers.CharField(read_only=True)
+    license_number = serializers.CharField(required=True)
+    bar_council_id = serializers.CharField(required=True)
+    consultation_fee = serializers.CharField(required=False, allow_blank=True)
+    bio = serializers.CharField(required=False, allow_blank=True)
+    verification_documents = serializers.ListField(
+        child=serializers.CharField(max_length=512), required=False, allow_empty=True
+    )
     verification_status = serializers.CharField(read_only=True)
     verification_notes = serializers.CharField(read_only=True)
+
+    def update(self, instance, validated_data):
+        """Update existing lawyer profile"""
+        instance.phone = validated_data.get("phone", instance.phone)
+        instance.education = validated_data.get("education", instance.education)
+        instance.experience_years = validated_data.get("experience_years", instance.experience_years)
+        instance.law_firm = validated_data.get("law_firm", instance.law_firm)
+        instance.specializations = validated_data.get("specializations", instance.specializations)
+        instance.license_number = validated_data.get("license_number", instance.license_number)
+        instance.bar_council_id = validated_data.get("bar_council_id", instance.bar_council_id)
+        instance.consultation_fee = validated_data.get("consultation_fee", instance.consultation_fee)
+        instance.bio = validated_data.get("bio", instance.bio)
+        instance.verification_documents = validated_data.get("verification_documents", instance.verification_documents)
+        
+        # If status was not_submitted, set to pending on submission
+        if instance.verification_status == 'not_submitted':
+             instance.verification_status = 'pending'
+             
+        instance.save()
+        return instance
+
+    def create(self, validated_data):
+        """Create new lawyer profile"""
+        user = validated_data.pop('user')
+        if LawyerProfile.objects(user=user).first():
+             raise serializers.ValidationError("Profile already exists for this user.")
+             
+        profile = LawyerProfile(user=user, **validated_data)
+        profile.verification_status = 'pending'
+        profile.save()
+        return profile
 
     def to_representation(self, instance):
         user_data = UserSerializer(instance.user).data if instance.user else None
