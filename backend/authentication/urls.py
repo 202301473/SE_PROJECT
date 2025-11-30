@@ -16,24 +16,35 @@ from .views import (
     admin_lawyer_verify_view,
     admin_promote_user_view,
     admin_create_admin_user_view,
+    search_users_view,
 )
 
 urlpatterns = [
-    path('signup/', signup_view, name='signup'),
-    path('login/', login_view, name='login'),
-    path('google/', google_auth_view, name='google_auth'),
-    path('verify-otp/', verify_otp_view, name='verify_otp'),
-    path('resend-otp/', resend_otp_view, name='resend_otp'),
-    path('profile/', profile_detail_update_view, name='profile'), # Use the combined view
-    path('logout/', logout_view, name='logout'),
-    path('forgot-password/', forgot_password_view, name='forgot_password'),
-    path('reset-password/', reset_password_view, name='reset_password'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('change-password/', change_password_view, name='change_password'),
-    path('add-password/', add_password_view, name='add_password'),
-
-    path('admin/lawyers/', admin_lawyer_list_view, name='admin_lawyer_list'),
-    path('admin/lawyers/<str:lawyer_id>/verify/', admin_lawyer_verify_view, name='admin_lawyer_verify'),
-    path('admin/users/promote/', admin_promote_user_view, name='admin_promote_user'),
-    path('admin/users/create-admin/', admin_create_admin_user_view, name='admin_create_admin_user'),
+    path("signup/", signup_view, name="signup"),
+    path("login/", login_view, name="login"),
+    path("google/", google_auth_view, name="google_auth"),
+    path("verify-otp/", verify_otp_view, name="verify_otp"),
+    path("resend-otp/", resend_otp_view, name="resend_otp"),
+    path(
+        "profile/", profile_detail_update_view, name="profile"
+    ),  # Use the combined view
+    path("logout/", logout_view, name="logout"),
+    path("forgot-password/", forgot_password_view, name="forgot_password"),
+    path("reset-password/", reset_password_view, name="reset_password"),
+    path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("change-password/", change_password_view, name="change_password"),
+    path("add-password/", add_password_view, name="add_password"),
+    path("search-users/", search_users_view, name="search_users"),
+    path("admin/lawyers/", admin_lawyer_list_view, name="admin_lawyer_list"),
+    path(
+        "admin/lawyers/<str:lawyer_id>/verify/",
+        admin_lawyer_verify_view,
+        name="admin_lawyer_verify",
+    ),
+    path("admin/users/promote/", admin_promote_user_view, name="admin_promote_user"),
+    path(
+        "admin/users/create-admin/",
+        admin_create_admin_user_view,
+        name="admin_create_admin_user",
+    ),
 ]

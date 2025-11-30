@@ -11,12 +11,9 @@ class UserModelTest(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        # Ensure MongoDB is connected for tests
         
-        # Disconnect any existing connections
         disconnect()
         
-        # Connect to a test database
         cls.db_name = 'test_legal_document_navigator_db'
         connect(cls.db_name, host=settings.MONGO_URI, alias='default')
 
@@ -25,20 +22,17 @@ class UserModelTest(TestCase):
         from mongoengine import disconnect
         from pymongo import MongoClient
 
-        # Clean up the test database
-        client = MongoClient(settings.MONGO_URI) # Use the URI from settings
+        client = MongoClient(settings.MONGO_URI) 
         client.drop_database(cls.db_name)
         client.close()
         
-        # Disconnect from MongoDB
         disconnect()
         super().tearDownClass()
 
     def setUp(self):
-        # Clear all collections before each test
         User.objects.all().delete()
-        LawyerProfile.objects.all().delete() # Clear other models if necessary
-        LawyerConnectionRequest.objects.all().delete() # Clear other models if necessary
+        LawyerProfile.objects.all().delete() 
+        LawyerConnectionRequest.objects.all().delete() 
 
     def test_create_user(self):
         """
@@ -106,7 +100,7 @@ class UserModelTest(TestCase):
         Test that creating a user with a duplicate email raises an error.
         """
         User.create_user(email='duplicate@example.com', username='user1', password='password123')
-        with self.assertRaises(Exception): # MongoEngine might raise different exception
+        with self.assertRaises(Exception): 
             User.create_user(email='duplicate@example.com', username='user2', password='password123')
 
     def test_duplicate_username(self):
@@ -114,5 +108,5 @@ class UserModelTest(TestCase):
         Test that creating a user with a duplicate username raises an error.
         """
         User.create_user(email='user1@example.com', username='duplicateuser', password='password123')
-        with self.assertRaises(Exception): # MongoEngine might raise different exception
+        with self.assertRaises(Exception): 
             User.create_user(email='user2@example.com', username='duplicateuser', password='password123')

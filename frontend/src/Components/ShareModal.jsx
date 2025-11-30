@@ -16,6 +16,8 @@ const ShareModal = ({ documentId, documentTitle, onClose, initialSharedWithUsers
   const [usernameToShare, setUsernameToShare] = useState('');
   const [userPermissionLevel, setUserPermissionLevel] = useState('view');
   const [sharedUsers, setSharedUsers] = useState(initialSharedWithUsers);
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   useEffect(() => {
     const fetchShareSettings = async () => {
@@ -34,6 +36,30 @@ const ShareModal = ({ documentId, documentTitle, onClose, initialSharedWithUsers
     };
     fetchShareSettings();
   }, [documentId]);
+
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (usernameToShare.trim().length < 2) {
+        setAvailableUsers([]);
+        setShowUserDropdown(false);
+        return;
+      }
+      
+      try {
+        const response = await axios.get('api/auth/search-users/', {
+          params: { q: usernameToShare }
+        });
+        setAvailableUsers(response.data.users || []);
+        setShowUserDropdown(true);
+      } catch (error) {
+        console.error('Error searching users:', error);
+        setAvailableUsers([]);
+      }
+    };
+    
+    const debounceTimer = setTimeout(searchUsers, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [usernameToShare]);
 
   const generateLink = async () => {
     setLoading(true);
@@ -71,6 +97,7 @@ const ShareModal = ({ documentId, documentTitle, onClose, initialSharedWithUsers
       });
       toast.success(`Document shared with ${usernameToShare}!`);
       setUsernameToShare('');
+      setShowUserDropdown(false);
       const response = await axios.get(`api/documents/conversations/${documentId}/`);
       setSharedUsers(response.data.shared_with_users || []);
     } catch (error) {
@@ -79,6 +106,11 @@ const ShareModal = ({ documentId, documentTitle, onClose, initialSharedWithUsers
     } finally {
       setLoading(false);
     }
+  };
+
+  const selectUser = (username) => {
+    setUsernameToShare(username);
+    setShowUserDropdown(false);
   };
 
   const handleRemoveUserShare = async (username) => {
@@ -163,15 +195,38 @@ const ShareModal = ({ documentId, documentTitle, onClose, initialSharedWithUsers
           {/* Share with Specific Users Section */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-foreground">Share with People</h3>
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="Enter username..."
-                value={usernameToShare}
-                onChange={(e) => setUsernameToShare(e.target.value)}
-                disabled={loading}
-                className="bg-background/50 border-border/50"
-              />
+            <div className="flex gap-2 relative">
+              <div className="flex-1 relative">
+                <Input
+                  type="text"
+                  placeholder="Enter username..."
+                  value={usernameToShare}
+                  onChange={(e) => setUsernameToShare(e.target.value)}
+                  onFocus={() => usernameToShare.length >= 2 && setShowUserDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
+                  disabled={loading}
+                  className="bg-background/50 border-border/50"
+                />
+                {showUserDropdown && availableUsers.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-card border border-border/50 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {availableUsers.map((user) => (
+                      <div
+                        key={user.username}
+                        onClick={() => selectUser(user.username)}
+                        className="px-3 py-2 hover:bg-primary/10 cursor-pointer flex items-center gap-2"
+                      >
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-xs font-bold text-primary">
+                          {user.username.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{user.username}</p>
+                          {user.name && <p className="text-xs text-muted-foreground">{user.name}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <Select value={userPermissionLevel} onValueChange={setUserPermissionLevel} disabled={loading}>
                 <SelectTrigger className="w-[100px] bg-background/50 border-border/50">
                   <SelectValue placeholder="Access" />

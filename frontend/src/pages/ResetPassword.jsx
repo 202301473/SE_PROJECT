@@ -16,6 +16,7 @@ const ResetPassword = () => {
     confirm_password: ''
   });
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
   if (!email) {
     toast.error('No email provided for password reset. Please try again.');
@@ -28,13 +29,53 @@ const ResetPassword = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
+    // Clear error for this field when user starts typing
+    if (errors[e.target.name]) {
+      setErrors({
+        ...errors,
+        [e.target.name]: ''
+      });
+    }
+  };
+
+  const validatePassword = (password) => {
+    const passwordErrors = [];
+    
+    if (password.length < 8) {
+      passwordErrors.push('at least 8 characters');
+    }
+    if (!/[A-Z]/.test(password)) {
+      passwordErrors.push('one uppercase letter');
+    }
+    if (!/[a-z]/.test(password)) {
+      passwordErrors.push('one lowercase letter');
+    }
+    if (!/[0-9]/.test(password)) {
+      passwordErrors.push('one number');
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]/.test(password)) {
+      passwordErrors.push('one special character');
+    }
+    
+    return passwordErrors;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const newErrors = {};
+
+    // Validate password strength
+    const passwordValidation = validatePassword(formData.new_password);
+    if (passwordValidation.length > 0) {
+      newErrors.new_password = `Password must contain ${passwordValidation.join(', ')}`;
+    }
 
     if (formData.new_password !== formData.confirm_password) {
-      toast.error("Passwords do not match.");
+      newErrors.confirm_password = "Passwords do not match.";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
@@ -116,12 +157,43 @@ const ResetPassword = () => {
               id="new_password"
               name="new_password"
               type="password"
+              placeholder="Enter new password"
               required
               value={formData.new_password}
               onChange={handleInputChange}
               disabled={loading}
-              className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+              className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.new_password ? 'border-red-500' : ''}`}
             />
+            {errors.new_password && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
+                <p className="text-xs text-red-600 dark:text-red-400">{errors.new_password}</p>
+              </div>
+            )}
+            <div className="bg-muted/50 border border-border/30 rounded-lg p-3 mt-2">
+              <p className="text-xs font-semibold text-foreground mb-2">Password must contain:</p>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li className={`flex items-center gap-2 ${formData.new_password.length >= 8 ? 'text-green-600 dark:text-green-400' : ''}`}>
+                  <span>{formData.new_password.length >= 8 ? '✓' : '○'}</span>
+                  At least 8 characters
+                </li>
+                <li className={`flex items-center gap-2 ${/[A-Z]/.test(formData.new_password) ? 'text-green-600 dark:text-green-400' : ''}`}>
+                  <span>{/[A-Z]/.test(formData.new_password) ? '✓' : '○'}</span>
+                  One uppercase letter (A-Z)
+                </li>
+                <li className={`flex items-center gap-2 ${/[a-z]/.test(formData.new_password) ? 'text-green-600 dark:text-green-400' : ''}`}>
+                  <span>{/[a-z]/.test(formData.new_password) ? '✓' : '○'}</span>
+                  One lowercase letter (a-z)
+                </li>
+                <li className={`flex items-center gap-2 ${/[0-9]/.test(formData.new_password) ? 'text-green-600 dark:text-green-400' : ''}`}>
+                  <span>{/[0-9]/.test(formData.new_password) ? '✓' : '○'}</span>
+                  One number (0-9)
+                </li>
+                <li className={`flex items-center gap-2 ${/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]/.test(formData.new_password) ? 'text-green-600 dark:text-green-400' : ''}`}>
+                  <span>{/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]/.test(formData.new_password) ? '✓' : '○'}</span>
+                  One special character (!@#$%^&*)
+                </li>
+              </ul>
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirm_password" className="text-foreground font-medium">Confirm Password</Label>
@@ -129,12 +201,18 @@ const ResetPassword = () => {
               id="confirm_password"
               name="confirm_password"
               type="password"
+              placeholder="Confirm new password"
               required
               value={formData.confirm_password}
               onChange={handleInputChange}
               disabled={loading}
-              className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+              className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.confirm_password ? 'border-red-500' : ''}`}
             />
+            {errors.confirm_password && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
+                <p className="text-xs text-red-600 dark:text-red-400">{errors.confirm_password}</p>
+              </div>
+            )}
           </div>
           <Button 
             type="submit" 

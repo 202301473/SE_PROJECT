@@ -56,7 +56,6 @@ def get_tokens_for_user(user):
 def signup_view(request):
     """Register new user and send OTP for verification"""
     try:
-        # Validate request data
         if not request.data:
             return Response(
                 {"error": "No data provided. Please fill in all required fields."},
@@ -65,7 +64,6 @@ def signup_view(request):
 
         serializer = RegisterSerializer(data=request.data)
         if not serializer.is_valid():
-            # Format validation errors for better readability
             errors = {}
             for field, messages in serializer.errors.items():
                 if isinstance(messages, list):
@@ -74,7 +72,6 @@ def signup_view(request):
                     errors[field] = str(messages)
             return Response(errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create user
         try:
             user = serializer.save()
         except Exception as e:
@@ -86,16 +83,13 @@ def signup_view(request):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # User is not verified yet, send OTP
         user.is_verified = False
         user.save()
 
-        # Generate and send OTP
         try:
             otp_sent = create_and_send_otp(user)
 
             if not otp_sent:
-                # Rollback user creation if OTP fails
                 user.delete()
                 return Response(
                     {
@@ -104,7 +98,6 @@ def signup_view(request):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
         except Exception as e:
-            # Rollback user creation if OTP fails
             user.delete()
             return Response(
                 {
@@ -143,7 +136,6 @@ def signup_view(request):
 def login_view(request):
     """Login user with email and password"""
     try:
-        # Validate request data
         if not request.data:
             return Response(
                 {"error": "Please provide email and password."},
@@ -152,7 +144,6 @@ def login_view(request):
 
         serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
-            # Format validation errors
             errors = {}
             for field, messages in serializer.errors.items():
                 if isinstance(messages, list):
@@ -164,7 +155,6 @@ def login_view(request):
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
 
-        # Check if user exists
         try:
             user = User.objects(email=email).first()
             if not user:
@@ -190,7 +180,6 @@ def login_view(request):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # Check if user registered with Google and has no usable password
         if user.auth_provider == "google" and not user.has_usable_password():
             return Response(
                 {
@@ -199,7 +188,6 @@ def login_view(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Authenticate user
         try:
             authenticated_user = authenticate(email=email, password=password)
             if authenticated_user is None:
@@ -219,9 +207,7 @@ def login_view(request):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # Check if user is verified
         if not user.is_verified:
-            # Send OTP for verification
             try:
                 otp_sent = create_and_send_otp(user)
 
@@ -251,7 +237,6 @@ def login_view(request):
                 status=status.HTTP_200_OK,
             )
 
-        # User is verified, generate tokens
         try:
             tokens = get_tokens_for_user(user)
             user_data = UserSerializer(user).data
@@ -289,7 +274,6 @@ def login_view(request):
 def google_auth_view(request):
     """Authenticate user with Google OAuth"""
     try:
-        # Validate request data
         if not request.data or not request.data.get("token"):
             return Response(
                 {"error": "Google authentication token is required."},
@@ -308,15 +292,12 @@ def google_auth_view(request):
 
         token = serializer.validated_data["token"]
 
-        # Verify the token by fetching user info from Google
-        # This works with both access tokens and ID tokens
         headers = {"Authorization": f"Bearer {token}"}
         response = http_requests.get(
             "https://www.googleapis.com/oauth2/v3/userinfo", headers=headers, timeout=10
         )
 
         if response.status_code != 200:
-            # If access token fails, try to verify as ID token
             if settings.GOOGLE_CLIENT_ID:
                 try:
                     idinfo = id_token.verify_oauth2_token(
@@ -339,7 +320,6 @@ def google_auth_view(request):
         else:
             user_info = response.json()
 
-        # Get user info from Google response
         email = user_info.get("email")
         google_id = user_info.get("sub")
         name = user_info.get("name", "")
@@ -350,24 +330,42 @@ def google_auth_view(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check if user exists
         user = None
         try:
             user = User.objects(email=email).first()
             if user:
-                # Update Google ID if not set
-                if not user.google_id:
+                # User already exists - just log them in
+                if user.google_id and user.google_id == google_id:
+                    # Same Google account - proceed with login
+                    pass
+                elif not user.google_id:
                     user.google_id = google_id
                     user.auth_provider = "google"
-                    user.is_verified = True  # Google users are auto-verified
+                    user.is_verified = True
                     user.save()
+                else:
+                    user.google_id = google_id
+                    user.auth_provider = "google"
+                    user.is_verified = True
+                    user.save()
+
+                tokens = get_tokens_for_user(user)
+                user_data = UserSerializer(user).data
+
+                return Response(
+                    {
+                        "message": "Google authentication successful",
+                        "user": user_data,
+                        "tokens": tokens,
+                        "redirect": "home",
+                    },
+                    status=status.HTTP_200_OK,
+                )
         except DoesNotExist:
             user = None
 
         if not user:
-            # Create new user
             username = email.split("@")[0]
-            # Ensure username is unique
             base_username = username
             counter = 1
             while User.objects(username=username).first():
@@ -380,9 +378,9 @@ def google_auth_view(request):
                 name=name,
                 google_id=google_id,
                 auth_provider="google",
-                password="!",  # Unusable password for OAuth users
+                password="!",
             )
-            user.is_verified = True  # Google users are auto-verified
+            user.is_verified = True
             user.save()
 
         tokens = get_tokens_for_user(user)
@@ -439,42 +437,31 @@ def profile_detail_update_view(request):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     elif request.method == "PATCH":
-        data = request.data.copy()  # Make a mutable copy of request.data
+        data = request.data.copy()
 
-        # Handle profile picture upload
         profile_picture_file = request.FILES.get("profile_picture")
         if profile_picture_file:
             try:
-                # Upload to Cloudinary
                 upload_result = cloudinary.uploader.upload(profile_picture_file)
-                data["profile_picture"] = upload_result[
-                    "secure_url"
-                ]  # Add the URL to the data for the serializer
+                data["profile_picture"] = upload_result["secure_url"]
             except Exception as e:
                 return Response(
                     {"error": f"Failed to upload profile picture: {str(e)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
-        # Handle cover photo upload
         cover_photo_file = request.FILES.get("cover_photo")
         if cover_photo_file:
             try:
-                # Upload to Cloudinary
                 upload_result = cloudinary.uploader.upload(cover_photo_file)
-                data["cover_photo"] = upload_result[
-                    "secure_url"
-                ]  # Add the URL to the data for the serializer
+                data["cover_photo"] = upload_result["secure_url"]
             except Exception as e:
                 return Response(
                     {"error": f"Failed to upload cover photo: {str(e)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
-        # Handle other profile data (e.g., name)
-        serializer = UserProfileSerializer(
-            user, data=data, partial=True
-        )  # Pass the modified data
+        serializer = UserProfileSerializer(user, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
@@ -487,7 +474,6 @@ def profile_detail_update_view(request):
 def verify_otp_view(request):
     """Verify OTP and activate user account"""
     try:
-        # Validate request data
         if not request.data:
             return Response(
                 {"error": "Please provide email and OTP code."},
@@ -496,7 +482,6 @@ def verify_otp_view(request):
 
         serializer = VerifyOTPSerializer(data=request.data)
         if not serializer.is_valid():
-            # Format validation errors
             errors = {}
             for field, messages in serializer.errors.items():
                 if isinstance(messages, list):
@@ -508,7 +493,6 @@ def verify_otp_view(request):
         email = serializer.validated_data["email"]
         otp = serializer.validated_data["otp_code"]
 
-        # Find user
         try:
             user = User.objects(email=email).first()
             if not user:
@@ -530,7 +514,6 @@ def verify_otp_view(request):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # Verify OTP
         try:
             if is_otp_valid(user, otp):
                 user.is_verified = True
@@ -578,7 +561,6 @@ def verify_otp_view(request):
 def resend_otp_view(request):
     """Resend OTP to user's email"""
     try:
-        # Validate request data
         if not request.data or not request.data.get("email"):
             return Response(
                 {"error": "Email address is required."},
@@ -587,7 +569,6 @@ def resend_otp_view(request):
 
         serializer = ResendOTPSerializer(data=request.data)
         if not serializer.is_valid():
-            # Format validation errors
             errors = {}
             for field, messages in serializer.errors.items():
                 if isinstance(messages, list):
@@ -598,7 +579,6 @@ def resend_otp_view(request):
 
         email = serializer.validated_data["email"]
 
-        # Find user
         try:
             user = User.objects(email=email).first()
             if not user:
@@ -620,14 +600,12 @@ def resend_otp_view(request):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # Check if already verified
         if user.is_verified:
             return Response(
                 {"error": "Your account is already verified. Please login."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Send OTP
         try:
             otp_sent = create_and_send_otp(user)
 
@@ -672,7 +650,8 @@ def logout_view(request):
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([AllowAny])
 def forgot_password_view(request):
     """Send OTP for password reset"""
@@ -695,7 +674,6 @@ def forgot_password_view(request):
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    # Check if user registered with Google
     if user.auth_provider == "google":
         return Response(
             {
@@ -704,7 +682,6 @@ def forgot_password_view(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Generate and send OTP for password reset
     otp_sent = create_and_send_otp(user)
 
     if not otp_sent:
@@ -723,10 +700,10 @@ def forgot_password_view(request):
 @permission_classes([AllowAny])
 def reset_password_view(request):
     """Reset user password with OTP verification"""
-    print("Reset password request data:", request.data)  # Debugging line
+    print("Reset password request data:", request.data)
     serializer = ResetPasswordSerializer(data=request.data)
     if not serializer.is_valid():
-        print("ResetPasswordSerializer errors:", serializer.errors) # Debugging line
+        print("ResetPasswordSerializer errors:", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     email = serializer.validated_data["email"]
@@ -742,7 +719,6 @@ def reset_password_view(request):
     except DoesNotExist:
         return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    # Check if user registered with Google
     if user.auth_provider == "google":
         return Response(
             {
@@ -751,16 +727,14 @@ def reset_password_view(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Verify OTP
     if not is_otp_valid(user, otp):
         return Response(
             {"error": "Invalid or expired OTP."}, status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Reset password
     user.set_password(new_password)
     user.save()
-    clear_otp(user)  # Clear OTP after successful reset
+    clear_otp(user)
 
     return Response(
         {
@@ -769,7 +743,8 @@ def reset_password_view(request):
         status=status.HTTP_200_OK,
     )
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def change_password_view(request):
     """Change user password"""
@@ -777,37 +752,89 @@ def change_password_view(request):
     serializer = ChangePasswordSerializer(data=request.data)
     if serializer.is_valid():
         if not user.check_password(serializer.data.get("current_password")):
-            return Response({"error": "Incorrect current password."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Incorrect current password."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         user.set_password(serializer.data.get("new_password"))
         user.save()
-        return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
-    print("ChangePasswordSerializer errors:", serializer.errors) # Debugging line
+        return Response(
+            {"message": "Password changed successfully."}, status=status.HTTP_200_OK
+        )
+    print("ChangePasswordSerializer errors:", serializer.errors)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def add_password_view(request):
     """Add a password to a Google-authenticated user"""
     user = request.user
-    if user.auth_provider != 'google':
-        return Response({"error": "This feature is only for users who signed up with Google."}, status=status.HTTP_400_BAD_REQUEST)
-    if user.password and user.password != '!':
-        return Response({"error": "You already have a password."}, status=status.HTTP_400_BAD_REQUEST)
-    
+    if user.auth_provider != "google":
+        return Response(
+            {"error": "This feature is only for users who signed up with Google."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if user.password and user.password != "!":
+        return Response(
+            {"error": "You already have a password."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     serializer = AddPasswordSerializer(data=request.data)
     if serializer.is_valid():
         user.set_password(serializer.data.get("new_password"))
         user.save()
-        return Response({"message": "Password added successfully."}, status=status.HTTP_200_OK)
-    print("AddPasswordSerializer errors:", serializer.errors) # Debugging line
+        return Response(
+            {"message": "Password added successfully."}, status=status.HTTP_200_OK
+        )
+    print("AddPasswordSerializer errors:", serializer.errors)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def search_users_view(request):
+    """Search for users by username or name"""
+    query = request.query_params.get("q", "").strip()
+
+    if len(query) < 2:
+        return Response({"users": []}, status=status.HTTP_200_OK)
+
+    try:
+        users = User.objects(
+            __raw__={
+                "$or": [
+                    {"username": {"$regex": query, "$options": "i"}},
+                    {"name": {"$regex": query, "$options": "i"}},
+                ]
+            }
+        ).limit(10)
+
+        user_list = [
+            {"username": user.username, "name": user.name, "email": user.email}
+            for user in users
+        ]
+
+        return Response({"users": user_list}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response(
+            {
+                "error": "Failed to search users.",
+                "details": str(e) if settings.DEBUG else None,
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 def _require_admin(user):
     """Helper to ensure the requesting user is an admin/superuser"""
     if getattr(user, "role", None) == "admin" or getattr(user, "is_superuser", False):
         return None
-    return Response({"error": "Access denied. Admin privileges required."}, status=status.HTTP_403_FORBIDDEN)
+    return Response(
+        {"error": "Access denied. Admin privileges required."},
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 @api_view(["GET"])
@@ -853,11 +880,15 @@ def admin_lawyer_verify_view(request, lawyer_id):
         lawyer_user = None
 
     if not lawyer_user:
-        return Response({"error": "Lawyer user not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "Lawyer user not found."}, status=status.HTTP_404_NOT_FOUND
+        )
 
     profile = LawyerProfile.objects(user=lawyer_user).first()
     if not profile:
-        return Response({"error": "Lawyer profile not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "Lawyer profile not found."}, status=status.HTTP_404_NOT_FOUND
+        )
 
     verification_status = serializer.validated_data["verification_status"]
     verification_notes = serializer.validated_data.get("verification_notes", "").strip()
@@ -905,10 +936,12 @@ def admin_promote_user_view(request):
         user = None
 
     if not user:
-        return Response({"error": "User not found with this email."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "User not found with this email."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
     user.role = new_role
-    # For admins, also mark as staff
     if new_role == "admin":
         user.is_staff = True
     user.save()

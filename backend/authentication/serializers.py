@@ -16,27 +16,27 @@ class UserSerializer(serializers.Serializer):
     auth_provider = serializers.CharField(read_only=True)
     date_joined = serializers.DateTimeField(read_only=True)
     has_password = serializers.SerializerMethodField()
-    
+
     def get_has_password(self, instance):
-        return instance.password != '!'
-    
+        return instance.password != "!"
+
     def to_representation(self, instance):
         """Convert MongoEngine document to dict"""
         return {
-            'id': str(instance.id),
-            'email': instance.email,
-            'username': instance.username,
-            'name': instance.name,
-            'profile_picture': instance.profile_picture,
-            'cover_photo': instance.cover_photo, # Added cover_photo
-            'auth_provider': instance.auth_provider,
-            'date_joined': instance.date_joined,
-            'phone': instance.phone,
-            'role': instance.role,
-            'is_verified': instance.is_verified,
-            'is_lawyer_verified': instance.is_lawyer_verified,
-            'lawyer_verification_status': instance.lawyer_verification_status,
-            'has_password': self.get_has_password(instance)
+            "id": str(instance.id),
+            "email": instance.email,
+            "username": instance.username,
+            "name": instance.name,
+            "profile_picture": instance.profile_picture,
+            "cover_photo": instance.cover_photo,  # Added cover_photo
+            "auth_provider": instance.auth_provider,
+            "date_joined": instance.date_joined,
+            "phone": instance.phone,
+            "role": instance.role,
+            "is_verified": instance.is_verified,
+            "is_lawyer_verified": instance.is_lawyer_verified,
+            "lawyer_verification_status": instance.lawyer_verification_status,
+            "has_password": self.get_has_password(instance),
         }
 
 
@@ -85,10 +85,15 @@ class RegisterSerializer(serializers.Serializer):
 
         # Check if email already exists
         try:
-            if User.objects(email=value).first():
-                raise serializers.ValidationError(
-                    "An account with this email already exists. Please use a different email or try logging in."
-                )
+            existing_user = User.objects(email=value).first()
+            if existing_user:
+                if not existing_user.is_verified:
+                    existing_user.delete()
+                    return value.lower().strip()
+                else:
+                    raise serializers.ValidationError(
+                        "An account with this email already exists. Please use a different email or try logging in."
+                    )
         except Exception as e:
             if "already exists" in str(e):
                 raise
@@ -113,7 +118,6 @@ class RegisterSerializer(serializers.Serializer):
                 "Username must not exceed 150 characters."
             )
 
-        # Check for valid characters (alphanumeric, underscore, hyphen)
         import re
 
         if not re.match(r"^[a-zA-Z0-9_-]+$", value):
@@ -121,12 +125,15 @@ class RegisterSerializer(serializers.Serializer):
                 "Username can only contain letters, numbers, underscores, and hyphens."
             )
 
-        # Check if username already exists
         try:
-            if User.objects(username=value).first():
-                raise serializers.ValidationError(
-                    "This username is already taken. Please choose a different username."
-                )
+            existing_user = User.objects(username=value).first()
+            if existing_user:
+                if not existing_user.is_verified:
+                    return value.strip()
+                else:
+                    raise serializers.ValidationError(
+                        "This username is already taken. Please choose a different username."
+                    )
         except Exception as e:
             if "already taken" in str(e):
                 raise
@@ -155,35 +162,28 @@ class RegisterSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         """Validate password match and lawyer-specific fields"""
-        # Validate password match
         password = attrs.get("password", "")
         password2 = attrs.get("password2", "")
         errors = {}
 
-        # Check if passwords are provided
         if not password or not password2:
             errors["password"] = "Password is required."
             raise serializers.ValidationError(errors)
 
-        # Validate password strength using Django's validators FIRST
-        # This will catch common passwords, numeric passwords, etc.
         password_validation_errors = []
         try:
             validate_password(password)
         except Exception as e:
-            # Extract all password validation errors
             if hasattr(e, "messages"):
                 password_validation_errors.extend(e.messages)
             else:
                 password_validation_errors.append(str(e))
 
-        # Additional password strength validation (minimum length)
         if len(password) < 8:
             password_validation_errors.append(
                 "Password must be at least 8 characters long."
             )
 
-        # Custom password strength checks
         import re
 
         if not re.search(r"[A-Z]", password):
@@ -206,21 +206,17 @@ class RegisterSerializer(serializers.Serializer):
                 "Password must contain at least one special character (!@#$%^&*etc.)."
             )
 
-        # If there are password validation errors, set them
         if password_validation_errors:
             errors["password"] = " ".join(password_validation_errors)
 
-        # Check if passwords match (separate error for password2 field)
         if password != password2:
             errors["password2"] = (
                 "Passwords do not match. Please ensure both passwords are identical."
             )
 
-        # If there are any password errors, raise them now
         if errors:
             raise serializers.ValidationError(errors)
 
-        # Validate lawyer-specific fields
         role = attrs.get("role", "client")
         if role == "lawyer":
             missing_fields = []
@@ -343,8 +339,12 @@ class UserProfileSerializer(serializers.Serializer):
     """Serializer for updating user profile"""
 
     name = serializers.CharField(required=False, allow_blank=True, max_length=255)
-    profile_picture = serializers.URLField(required=False, allow_blank=True, max_length=255)
-    cover_photo = serializers.URLField(required=False, allow_blank=True, max_length=255) # Added cover_photo
+    profile_picture = serializers.URLField(
+        required=False, allow_blank=True, max_length=255
+    )
+    cover_photo = serializers.URLField(
+        required=False, allow_blank=True, max_length=255
+    )  # Added cover_photo
     role = serializers.CharField(read_only=True)
 
     def update(self, instance, validated_data):
@@ -352,9 +352,7 @@ class UserProfileSerializer(serializers.Serializer):
         instance.profile_picture = validated_data.get(
             "profile_picture", instance.profile_picture
         )
-        instance.cover_photo = validated_data.get(
-            "cover_photo", instance.cover_photo
-        )  # Added cover_photo
+        instance.cover_photo = validated_data.get("cover_photo", instance.cover_photo)
         instance.save()
         return instance
 
@@ -447,9 +445,7 @@ class ForgotPasswordSerializer(serializers.Serializer):
 class ResetPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     otp_code = serializers.CharField(required=True, max_length=6, min_length=6)
-    new_password = serializers.CharField(
-        write_only=True, required=True
-    )
+    new_password = serializers.CharField(write_only=True, required=True)
     confirm_password = serializers.CharField(write_only=True, required=True)
 
     def validate(self, attrs):
@@ -461,7 +457,7 @@ class ResetPasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"confirm_password": "Password fields didn't match."}
             )
-        
+
         try:
             validate_password(new_password)
         except Exception as e:
@@ -469,25 +465,33 @@ class ResetPasswordSerializer(serializers.Serializer):
 
         return attrs
 
+
 class ChangePasswordSerializer(serializers.Serializer):
     """Serializer for password change"""
+
     current_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True, validators=[validate_password])
     new_password2 = serializers.CharField(required=True)
 
     def validate(self, attrs):
-        if attrs['new_password'] != attrs['new_password2']:
-            raise serializers.ValidationError({"new_password": "New passwords didn't match."})
+        if attrs["new_password"] != attrs["new_password2"]:
+            raise serializers.ValidationError(
+                {"new_password": "New passwords didn't match."}
+            )
         return attrs
+
 
 class AddPasswordSerializer(serializers.Serializer):
     """Serializer for adding a password to a Google-authenticated user"""
+
     new_password = serializers.CharField(required=True, validators=[validate_password])
     new_password2 = serializers.CharField(required=True)
 
     def validate(self, attrs):
-        if attrs['new_password'] != attrs['new_password2']:
-            raise serializers.ValidationError({"new_password": "New passwords didn't match."})
+        if attrs["new_password"] != attrs["new_password2"]:
+            raise serializers.ValidationError(
+                {"new_password": "New passwords didn't match."}
+            )
         return attrs
 
 
@@ -514,7 +518,9 @@ class AdminCreateAdminSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     username = serializers.CharField(required=True, max_length=150)
     name = serializers.CharField(required=False, allow_blank=True, max_length=255)
-    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+    password = serializers.CharField(
+        write_only=True, required=True, validators=[validate_password]
+    )
 
     def validate_email(self, value):
         if User.objects(email=value).first():
@@ -561,7 +567,9 @@ class AdminCreateAdminSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     username = serializers.CharField(required=True, max_length=150)
     name = serializers.CharField(required=False, allow_blank=True, max_length=255)
-    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+    password = serializers.CharField(
+        write_only=True, required=True, validators=[validate_password]
+    )
 
     def validate_email(self, value):
         if User.objects(email=value).first():

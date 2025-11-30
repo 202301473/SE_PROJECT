@@ -16,8 +16,27 @@ const ConnectModal = ({ isOpen, onOpenChange, lawyer, onConnect }) => {
   const [message, setMessage] = useState('');
   const [preferredContact, setPreferredContact] = useState('');
   const [preferredTime, setPreferredTime] = useState('');
+  const [error, setError] = useState('');
+
+  const validateDateTime = (dateTimeString) => {
+    if (!dateTimeString) return true; 
+    const selectedDate = new Date(dateTimeString);
+    const now = new Date();
+    
+    if (selectedDate < now) {
+      return false;
+    }
+    return true;
+  };
 
   const handleSubmit = () => {
+    setError('');
+    
+    if (preferredTime && !validateDateTime(preferredTime)) {
+      setError('Please select a future date and time');
+      return;
+    }
+    
     onConnect({
       message,
       preferredContact,
@@ -63,13 +82,17 @@ const ConnectModal = ({ isOpen, onOpenChange, lawyer, onConnect }) => {
             <Label htmlFor="time" className="text-right">
               Time
             </Label>
-            <Input
-              id="time"
-              type="datetime-local"
-              value={preferredTime}
-              onChange={(e) => setPreferredTime(e.target.value)}
-              className="col-span-3"
-            />
+            <div className="col-span-3">
+              <Input
+                id="time"
+                type="datetime-local"
+                value={preferredTime}
+                onChange={(e) => setPreferredTime(e.target.value)}
+                min={new Date().toISOString().slice(0, 16)}
+                className={error ? 'border-red-500' : ''}
+              />
+              {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+            </div>
           </div>
         </div>
         <DialogFooter>

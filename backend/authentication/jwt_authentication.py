@@ -15,8 +15,6 @@ class MongoEngineJWTAuthentication(JWTAuthentication):
             return None
 
         try:
-            # Assuming user_id is a string representation of ObjectId
-            # Query MongoEngine User model directly
             user = User.objects(id=user_id).first()
             if user:
                 return user
