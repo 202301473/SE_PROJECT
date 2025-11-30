@@ -79,25 +79,28 @@ class DocumentConsumer(AsyncWebsocketConsumer):
             
             # 2. Process the full response (extract document text from JSON if present)
             ai_response_content = full_ai_response # Default to conversational text
-            parsed_json = None
             
             try:
+                # Find the JSON part of the response, whether it's in a markdown block or not
+                json_str = None
                 if '```json' in full_ai_response:
-                    json_str = full_ai_response.split('```json')[1].split('```')[0]
-                    parsed_json = json.loads(json_str)
+                    json_str = full_ai_response.split('```json')[1].split('```')[0].strip()
                 else:
-                    # If no markdown block, try to parse the whole string.
-                    # This is risky but can handle cases where the LLM forgets the block.
-                    parsed_json = json.loads(full_ai_response)
-            except (json.JSONDecodeError, IndexError):
-                # This happens if the response is not valid JSON or doesn't have the ```json block.
-                # In this case, we assume it's a conversational message or raw markdown.
-                pass
+                    # Find the first '{' and the last '}'
+                    start = full_ai_response.find('{')
+                    end = full_ai_response.rfind('}')
+                    if start != -1 and end != -1 and end > start:
+                        json_str = full_ai_response[start:end+1]
 
-            if parsed_json and parsed_json.get('type') == 'document' and 'text' in parsed_json:
-                # We got the specific document JSON we asked for.
-                ai_response_content = parsed_json['text']
-            # Otherwise, ai_response_content remains the full_ai_response, which is treated as markdown/text.
+                if json_str:
+                    parsed_json = json.loads(json_str)
+                    if parsed_json.get('type') == 'document' and 'text' in parsed_json:
+                        # We found the specific document JSON we asked for.
+                        ai_response_content = parsed_json['text']
+            except (json.JSONDecodeError, IndexError, AttributeError):
+                # If parsing fails at any point, we fall back to the default,
+                # which is to treat the whole response as a text/markdown message.
+                pass
 
             # 3. Update the conversation in the database
             await self.save_conversation_update(user_message, full_ai_response, ai_response_content)
