@@ -141,7 +141,11 @@ const DocumentCreation = () => {
     if (!mongoConversationId) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const accessToken = localStorage.getItem('access_token');
-    const wsUrl = `${protocol}//${window.location.hostname}:8000/ws/document/${mongoConversationId}/${accessToken ? `?token=${accessToken}` : ''}`;
+    let wsUrl = `${protocol}//${window.location.hostname}:8000/ws/document/${mongoConversationId}/`;
+    if (accessToken) {
+      wsUrl += `?token=${accessToken}`;
+    }
+    console.log("Attempting to connect to WebSocket:", wsUrl);
     const newWs = new WebSocket(wsUrl);
     ws.current = newWs;
     newWs.onmessage = (event) => {

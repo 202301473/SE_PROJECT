@@ -489,12 +489,12 @@ const DocumentAnalyzer = () => {
         w-3/4 max-w-xs sm:w-64 lg:w-80
         transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:relative lg:top-0 lg:z-10 lg:flex-shrink-0
+        lg:flex-shrink-0
         bg-card border-r border-border/50
         flex flex-col h-full
       `}>
         {/* Only show content if sidebar is logically open or on large screens */}
-        {(sidebarOpen || window.innerWidth >= 1024) && ( // Added window.innerWidth check for initial render
+        {sidebarOpen && (
           <>
             <div className="p-6 border-b border-border/50 flex-shrink-0">
               <div className="flex items-center justify-between mb-2">
@@ -568,7 +568,7 @@ const DocumentAnalyzer = () => {
       )}
 
       {/* Main content */}
-      <div className={`flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-0' : ''}`}>
+      <div className={`flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-80' : ''}`}>
         <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 h-full flex flex-col w-full overflow-y-auto custom-scrollbar">
           {/* Upload / Summary header */}
           {!hasAnalysis ? (
