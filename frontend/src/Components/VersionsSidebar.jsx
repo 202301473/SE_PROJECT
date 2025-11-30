@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { saveAs } from 'file-saver';
 import { Button } from "@/Components/ui/button";
 
-const VersionsSidebar = ({ conversationId, onSelectVersion, onClose, currentVersion, onDeleteVersion }) => { // Added onDeleteVersion prop
+const VersionsSidebar = ({ conversationId, onSelectVersion, onClose, currentVersion, onDeleteVersion, versionRefreshKey }) => { // Added onDeleteVersion prop
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -29,7 +29,7 @@ const VersionsSidebar = ({ conversationId, onSelectVersion, onClose, currentVers
 
   useEffect(() => {
     fetchDocumentVersions();
-  }, [conversationId, fetchDocumentVersions]);
+  }, [conversationId, fetchDocumentVersions, versionRefreshKey]); // Added versionRefreshKey as dependency
 
   const handleDownloadVersionPdf = async (versionNumber) => {
     try {
@@ -111,14 +111,13 @@ const VersionsSidebar = ({ conversationId, onSelectVersion, onClose, currentVers
                         )}
                       </div>
                       <p className="text-muted-foreground text-xs mt-1">
-                        {new Date(version.timestamp).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
+                                                  {new Date(version.uploaded_at).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                  })}                      </p>
                     </div>
                   </div>
                 </div>

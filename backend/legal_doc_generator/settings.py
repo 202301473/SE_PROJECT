@@ -152,24 +152,17 @@ TEMPLATES = [
 WSGI_APPLICATION = 'legal_doc_generator.wsgi.application'
 ASGI_APPLICATION = 'legal_doc_generator.asgi.application' # Added for Django Channels
 
-if DEBUG:
-    CHANNEL_LAYERS = {
-        "default": {
-            "BACKEND": "channels.layers.InMemoryChannelLayer", # Use in-memory for development
+# CHANNEL_LAYERS configuration
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/1') # Default to localhost for dev
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_URL],
         },
-    }
-else:
-    # Production settings for CHANNEL_LAYERS using Redis
-    # You must set up a Redis server and provide the URL in the REDIS_URL environment variable
-    REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/1')
-    CHANNEL_LAYERS = {
-        "default": {
-            "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {
-                "hosts": [REDIS_URL],
-            },
-        },
-    }
+    },
+}
 
 
 # Database

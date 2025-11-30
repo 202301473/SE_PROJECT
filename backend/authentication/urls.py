@@ -17,6 +17,7 @@ from .views import (
     admin_promote_user_view,
     admin_create_admin_user_view,
     search_users_view,
+    lawyer_profile_completion_view,
 )
 
 urlpatterns = [
@@ -25,9 +26,7 @@ urlpatterns = [
     path("google/", google_auth_view, name="google_auth"),
     path("verify-otp/", verify_otp_view, name="verify_otp"),
     path("resend-otp/", resend_otp_view, name="resend_otp"),
-    path(
-        "profile/", profile_detail_update_view, name="profile"
-    ),  # Use the combined view
+    path("profile/", profile_detail_update_view, name="profile"),
     path("logout/", logout_view, name="logout"),
     path("forgot-password/", forgot_password_view, name="forgot_password"),
     path("reset-password/", reset_password_view, name="reset_password"),
@@ -35,6 +34,7 @@ urlpatterns = [
     path("change-password/", change_password_view, name="change_password"),
     path("add-password/", add_password_view, name="add_password"),
     path("search-users/", search_users_view, name="search_users"),
+    path("lawyer-profile-complete/", lawyer_profile_completion_view, name="lawyer_profile_completion"),
     path("admin/lawyers/", admin_lawyer_list_view, name="admin_lawyer_list"),
     path(
         "admin/lawyers/<str:lawyer_id>/verify/",

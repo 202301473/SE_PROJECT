@@ -10,6 +10,9 @@ class DocumentConsumer(AsyncWebsocketConsumer):
         self.document_id = self.scope['url_route']['kwargs']['document_id']
         self.document_group_name = f'document_{self.document_id}'
 
+        print(f"Consumer: Attempting to connect to document: {self.document_id}")
+        print(f"Consumer: User in scope: {getattr(self.scope['user'], 'is_authenticated', False)}, ID: {getattr(self.scope['user'], 'id', 'N/A')}")
+
         # Join document group
         await self.channel_layer.group_add(
             self.document_group_name,

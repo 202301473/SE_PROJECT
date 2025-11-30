@@ -65,6 +65,7 @@ const DocumentCreation = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [finalDocument, setFinalDocument] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [versionRefreshKey, setVersionRefreshKey] = useState(0); // For refreshing versions sidebar
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const [isVersionsSidebarOpen, setIsVersionsSidebarOpen] = useState(false);
   const [currentVersion, setCurrentVersion] = useState(null);
@@ -145,7 +146,9 @@ const DocumentCreation = () => {
     if (accessToken) {
       wsUrl += `?token=${accessToken}`;
     }
-    console.log("Attempting to connect to WebSocket:", wsUrl);
+    console.log("WebSocket connection attempt details:");
+    console.log("  URL:", wsUrl);
+    console.log("  Access Token (first 10 chars):", accessToken ? accessToken.substring(0, 10) : "N/A");
     const newWs = new WebSocket(wsUrl);
     ws.current = newWs;
     newWs.onmessage = (event) => {
@@ -159,12 +162,8 @@ const DocumentCreation = () => {
           return [...prev, { sender: 'bot', text: data.chunk }];
         });
       } else if (data.type === 'chat_complete') {
-        console.log("Received chat_complete. Setting isGenerating to false.");
         setIsGenerating(false);
-        if (data.updated_document_content) {
-          console.log("Updating final document with new content.");
-          setFinalDocument(data.updated_document_content);
-        }
+        if (data.updated_document_content) setFinalDocument(data.updated_document_content);
       } else if (data.type === 'chat_error') {
         setIsGenerating(false);
         toast.error(`An error occurred: ${data.error}`);
@@ -271,6 +270,7 @@ const DocumentCreation = () => {
       }
       await fetchConversation(idToUse);
       setOriginalDocumentContent(finalDocument);
+      setVersionRefreshKey(prev => prev + 1); // Trigger refresh in VersionsSidebar
     } catch (error) {
       console.error('Error saving document:', error);
       toast.error(`Failed to save document: ${error.message}`);
@@ -442,7 +442,10 @@ const DocumentCreation = () => {
                         </div>
                       )}
                       <div className={`px-3 py-2 rounded-lg max-w-xs text-xs leading-relaxed ${msg.sender === 'user' ? 'bg-primary text-foreground' : 'bg-card text-foreground border border-border/10'}`}>
-                        <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</p>
+                        <div
+                  style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(convertMarkdownToHtml(msg.text)) }}
+                />
                       </div>
                       {msg.sender === 'user' && (
                         <div className="w-6 h-6 flex-shrink-0 rounded-full bg-muted flex items-center justify-center">
@@ -530,7 +533,10 @@ const DocumentCreation = () => {
                 </div>
               )}
               <div className={`px-3 py-2 rounded-lg max-w-xs text-xs leading-relaxed ${msg.sender === 'user' ? 'bg-primary text-foreground' : 'bg-card text-foreground border border-border/10'}`}>
-                <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</p>
+                <div
+                  style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(convertMarkdownToHtml(msg.text)) }}
+                />
               </div>
               {msg.sender === 'user' && (
                 <div className="w-6 h-6 flex-shrink-0 rounded-full bg-muted flex items-center justify-center">
@@ -721,6 +727,7 @@ const DocumentCreation = () => {
           onClose={() => setIsVersionsSidebarOpen(false)}
           currentVersion={currentVersion}
           onDeleteVersion={handleDeleteVersion}
+          versionRefreshKey={versionRefreshKey} // New prop
         />
       </div>
 

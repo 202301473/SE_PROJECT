@@ -388,6 +388,23 @@ def google_auth_view(request):
             )
 
         # Generate JWT tokens for the user
+        # Check if user is a lawyer and needs to complete their profile
+        if user.role == 'lawyer' and not user.is_lawyer_verified: # Assuming is_lawyer_verified means profile complete
+            # Check if a profile exists and is pending
+            lawyer_profile = LawyerProfile.objects(user=user).first()
+            if not lawyer_profile or lawyer_profile.verification_status == 'not_submitted':
+                # Return a special response to signal frontend to show onboarding modal
+                print(f"Lawyer {user.email} needs to complete profile.")
+                return Response(
+                    {
+                        "message": "Lawyer profile incomplete. Please provide more details.",
+                        "requires_lawyer_onboarding": True,
+                        "user": UserSerializer(user).data, # Send basic user data
+                    },
+                    status=status.HTTP_202_ACCEPTED, # 202 Accepted, indicates processing is ongoing
+                )
+
+        # If not a lawyer, or a lawyer with a complete profile, proceed with normal login
         print("Generating tokens for the user.")
         tokens = get_tokens_for_user(user)
         user_data = UserSerializer(user).data
@@ -812,6 +829,98 @@ def add_password_view(request):
         return Response({"message": "Password added successfully."}, status=status.HTTP_200_OK)
     print("AddPasswordSerializer errors:", serializer.errors) # Debugging line
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated]) # Requires temporary authentication (from initial Google login)
+def lawyer_profile_completion_view(request):
+    """
+    Endpoint for lawyers to complete their profile after initial Google login.
+    Creates or updates the LawyerProfile and then issues JWT tokens for full login.
+    """
+    user = request.user
+    if not user.is_authenticated:
+        return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+    if user.role != 'lawyer':
+        return Response({"error": "Only lawyers can complete this profile."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        # Check if profile already exists
+        lawyer_profile = LawyerProfile.objects(user=user).first()
+        serializer = LawyerProfileSerializer(instance=lawyer_profile, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            # Set default verification status if creating new profile
+            if not lawyer_profile:
+                serializer.validated_data['verification_status'] = 'pending'
+            
+            # Use the user as the reference
+            serializer.validated_data['user'] = user
+
+            serializer.save()
+
+            # Update user's lawyer status
+            user.is_lawyer_verified = True # Profile is now submitted for verification
+            user.lawyer_verification_status = 'pending'
+            user.save()
+
+            # Generate and return full JWT tokens
+            tokens = get_tokens_for_user(user)
+            user_data = UserSerializer(user).data
+
+            return Response(
+                {
+                    "message": "Lawyer profile submitted successfully for verification.",
+                    "user": user_data,
+                    "tokens": tokens,
+                    "redirect": "home",
+                },
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {"error": f"An unexpected error occurred: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def search_users_view(request):
+    """Search for users by username or name"""
+    query = request.query_params.get("q", "").strip()
+
+    if len(query) < 2:
+        return Response({"users": []}, status=status.HTTP_200_OK)
+
+    try:
+        users = User.objects(
+            __raw__={
+                "$or": [
+                    {"username": {"$regex": query, "$options": "i"}},
+                    {"name": {"$regex": query, "$options": "i"}},
+                ]
+            }
+        ).limit(10)
+
+        user_list = [
+            {"username": user.username, "name": user.name, "email": user.email}
+            for user in users
+        ]
+
+        return Response({"users": user_list}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response(
+            {
+                "error": "Failed to search users.",
+                "details": str(e) if settings.DEBUG else None,
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 def _require_admin(user):

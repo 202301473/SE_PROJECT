@@ -43,17 +43,13 @@ class TokenAuthMiddleware:
         self.inner = inner
 
     async def __call__(self, scope, receive, send):
-        print("Backend: TokenAuthMiddleware called.") # Log middleware entry
         query_string = parse_qs(scope['query_string'].decode('utf8'))
         token = query_string.get('token', [None])[0]
 
         if token:
-            print(f"Backend: Token found in query string.") # Log token presence
-            scope['user'] = await get_user_from_token(token)
+            user = await get_user_from_token(token)
+            scope['user'] = user
         else:
-            print("Backend: No token found in query string.") # Log no token
             scope['user'] = AnonymousUser()
-        
-        print(f"Backend: User in scope after TokenAuthMiddleware: {scope['user']}") # Log user in scope
 
         return await self.inner(scope, receive, send)

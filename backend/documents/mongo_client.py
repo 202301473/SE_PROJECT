@@ -36,8 +36,13 @@ def get_all_conversations(user=None):
         result = []
         for conv in conversations:
             conv['_id'] = str(conv['_id'])
+            if 'created_at' in conv:
+                conv['created_at'] = conv['created_at'].isoformat()
             if 'document_versions' in conv and conv['document_versions']:
                 conv['latest_document'] = conv['document_versions'][-1]['content']
+                for version in conv['document_versions']:
+                    if 'uploaded_at' in version:
+                        version['uploaded_at'] = version['uploaded_at'].isoformat()
             else:
                 conv['latest_document'] = ''
             result.append(conv)
@@ -52,6 +57,15 @@ def get_conversation_by_id(conversation_id):
         conversation = conversations_collection.find_one({'_id': ObjectId(conversation_id)})
         if conversation:
             conversation['_id'] = str(conversation['_id'])
+            # Convert datetime objects to ISO 8601 strings
+            if 'created_at' in conversation:
+                conversation['created_at'] = conversation['created_at'].isoformat()
+            if 'updated_at' in conversation:
+                conversation['updated_at'] = conversation['updated_at'].isoformat()
+            if 'document_versions' in conversation:
+                for version in conversation['document_versions']:
+                    if 'uploaded_at' in version:
+                        version['uploaded_at'] = version['uploaded_at'].isoformat()
         return conversation
     except Exception as e:
         print(f"Error fetching conversation by ID: {e}")
