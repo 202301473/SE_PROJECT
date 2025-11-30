@@ -16,34 +16,29 @@ from datetime import datetime
 class User(Document):
     """MongoDB User Model using MongoEngine"""
     
-    # Basic fields
     email = EmailField(required=True, unique=True, max_length=255)
     username = StringField(required=True, unique=True, max_length=150)
     name = StringField(max_length=255, default='')
     profile_picture = StringField(max_length=255, default='')
-    cover_photo = StringField(max_length=255, default='') # Added cover photo field
+    cover_photo = StringField(max_length=255, default='') 
     password = StringField(required=True)
     phone = StringField(max_length=20, default='')
     
-    # Authentication fields
     is_active = BooleanField(default=True)
     is_staff = BooleanField(default=False)
     is_superuser = BooleanField(default=False)
-    is_verified = BooleanField(default=False)  # Email verification status
+    is_verified = BooleanField(default=False)  
     role = StringField(max_length=32, default='client', choices=('client', 'lawyer', 'admin'))
     is_lawyer_verified = BooleanField(default=False)
-    lawyer_verification_status = StringField(max_length=32, default='not_submitted')  # pending, approved, rejected
+    lawyer_verification_status = StringField(max_length=32, default='not_submitted')  
     lawyer_verified_at = DateTimeField()
     
-    # OAuth fields
     google_id = StringField(max_length=255, unique=True, sparse=True)
     auth_provider = StringField(max_length=50, default='email')  # 'email' or 'google'
     
-    # OTP fields
     otp_code = StringField(max_length=6)
     otp_created_at = DateTimeField()
     
-    # Timestamps
     date_joined = DateTimeField(default=datetime.now)
     last_login = DateTimeField()
     
@@ -93,7 +88,6 @@ class User(Document):
     
     def save(self, *args, **kwargs):
         """Override save to handle password hashing"""
-        # If password is set and not already hashed, hash it
         if self.password and '$' not in self.password:
             self.set_password(self.password)
         super(User, self).save(*args, **kwargs)
@@ -114,7 +108,7 @@ class User(Document):
         if password:
             user.set_password(password)
         else:
-            user.password = None  # Set None password for OAuth users
+            user.password = None  
         user.save()
         return user
     

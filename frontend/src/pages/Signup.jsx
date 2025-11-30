@@ -35,19 +35,35 @@ const { setUser, setIsAuthenticated } = useAuth();
   const validateForm = () => {
     const newErrors = {};
 
-    // Basic validation
-    if (!formData.email.trim()) {
+    // Name validation
+    if (!formData.name.trim()) {
+      newErrors.name = 'Name is required';
+    } else if (!/^[a-zA-Z\s]+$/.test(formData.name.trim())) {
+      newErrors.name = 'Name can only contain letters and spaces';
+    }
+
+    // Email validation with trimming
+    const trimmedEmail = formData.email.trim();
+    if (!trimmedEmail) {
       newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    } else if (/\s/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email without any spaces';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       newErrors.email = 'Please enter a valid email address';
     }
 
+    // Username validation - allow numbers, disallow only special characters or only numbers
     if (!formData.username.trim()) {
       newErrors.username = 'Username is required';
     } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
-      newErrors.username = 'Username can only contain letters, numbers, underscores, and hyphens';
+      newErrors.username = 'Invalid username. Only letters, numbers, underscores, and hyphens allowed';
+    } else if (/^[^a-zA-Z0-9]+$/.test(formData.username)) {
+      newErrors.username = 'Invalid username. Cannot contain only special characters';
+    } else if (/^[0-9_-]+$/.test(formData.username)) {
+      newErrors.username = 'Invalid username. Must contain at least one letter';
     }
 
+    // Password validation
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else {
@@ -78,13 +94,40 @@ const { setUser, setIsAuthenticated } = useAuth();
       newErrors.password2 = 'Passwords do not match';
     }
 
+    // Phone validation - only numbers allowed
+    if (formData.phone && formData.phone.trim()) {
+      const phoneDigits = formData.phone.replace(/[\s-+()]/g, '');
+      if (!/^[0-9]+$/.test(phoneDigits)) {
+        newErrors.phone = 'Please enter a valid phone number (numbers only)';
+      } else if (phoneDigits.length !== 10) {
+        newErrors.phone = 'Phone number must be exactly 10 digits';
+      }
+    }
+
     // Lawyer-specific validation
     if (accountType === 'lawyer') {
       if (!formData.license_number.trim()) {
         newErrors.license_number = 'License Number is required for lawyers';
+      } else if (/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]/.test(formData.license_number)) {
+        newErrors.license_number = 'License Number cannot contain special characters';
       }
+      
       if (!formData.bar_council_id.trim()) {
         newErrors.bar_council_id = 'Bar Council ID is required for lawyers';
+      } else if (/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]/.test(formData.bar_council_id)) {
+        newErrors.bar_council_id = 'Bar Council ID cannot contain special characters';
+      }
+
+      if (!formData.education.trim()) {
+        newErrors.education = 'Education is required for lawyers';
+      } else if (!/^[a-zA-Z\s,.-]+$/.test(formData.education.trim())) {
+        newErrors.education = 'Education can only contain letters, spaces, commas, periods, and hyphens';
+      }
+
+      if (formData.law_firm && formData.law_firm.trim()) {
+        if (!/^[a-zA-Z\s&'-]+$/.test(formData.law_firm.trim())) {
+          newErrors.law_firm = 'Law firm name can only contain letters, spaces, ampersands, apostrophes, and hyphens';
+        }
       }
     }
 
@@ -94,9 +137,21 @@ const { setUser, setIsAuthenticated } = useAuth();
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    let processedValue = value;
+    
+    // Trim email automatically
+    if (name === 'email') {
+      processedValue = value.trim();
+    }
+    
+    // For phone, allow only numbers and common separators
+    if (name === 'phone') {
+      processedValue = value.replace(/[^0-9\s-+()]/g, '');
+    }
+    
     setFormData({
       ...formData,
-      [name]: value
+      [name]: processedValue
     });
     // Clear error for this field when user starts typing
     if (errors[name]) {
@@ -325,8 +380,13 @@ const { setUser, setIsAuthenticated } = useAuth();
                 value={formData.name} 
                 onChange={handleInputChange} 
                 disabled={loading}
-                className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.name ? 'border-red-500' : ''}`}
               />
+              {errors.name && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
+                  <p className="text-xs text-red-600 dark:text-red-400">{errors.name}</p>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="username" className="text-foreground font-medium">Username</Label>
@@ -444,8 +504,13 @@ const { setUser, setIsAuthenticated } = useAuth();
               value={formData.phone}
               onChange={handleInputChange}
               disabled={loading}
-              className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+              className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.phone ? 'border-red-500' : ''}`}
             />
+            {errors.phone && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
+                <p className="text-xs text-red-600 dark:text-red-400">{errors.phone}</p>
+              </div>
+            )}
           </div>
 
           {accountType === 'lawyer' && (
@@ -498,16 +563,22 @@ const { setUser, setIsAuthenticated } = useAuth();
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="education" className="text-foreground font-medium">Education</Label>
+                  <Label htmlFor="education" className="text-foreground font-medium">Education *</Label>
                   <Input
                     id="education"
                     name="education"
                     placeholder="LLB, LLM..."
+                    required={accountType === 'lawyer'}
                     value={formData.education}
                     onChange={handleInputChange}
                     disabled={loading}
-                    className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                    className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.education ? 'border-red-500' : ''}`}
                   />
+                  {errors.education && (
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
+                      <p className="text-xs text-red-600 dark:text-red-400">{errors.education}</p>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="experience_years" className="text-foreground font-medium">Years of Experience</Label>
@@ -535,8 +606,13 @@ const { setUser, setIsAuthenticated } = useAuth();
                     value={formData.law_firm}
                     onChange={handleInputChange}
                     disabled={loading}
-                    className="bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300"
+                    className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.law_firm ? 'border-red-500' : ''}`}
                   />
+                  {errors.law_firm && (
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
+                      <p className="text-xs text-red-600 dark:text-red-400">{errors.law_firm}</p>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="consultation_fee" className="text-foreground font-medium">Consultation Fee</Label>

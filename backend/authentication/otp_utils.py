@@ -16,7 +16,6 @@ def create_and_send_otp(user):
     user.otp_created_at = datetime.now()
     user.save()
     
-    # Send OTP via email
     subject = 'Your OTP for AdvocAI Verification'
     message = f'Your OTP code is: {otp_code}\n\nThis code will expire in 3 minutes.'
     from_email = settings.DEFAULT_FROM_EMAIL
@@ -43,7 +42,6 @@ def is_otp_valid(user, otp_code):
     if user.otp_code != otp_code:
         return False
     
-    # Check if OTP is expired (10 minutes)
     expiration_time = user.otp_created_at + timedelta(minutes=10)
     if datetime.now() > expiration_time:
         return False

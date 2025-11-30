@@ -124,7 +124,7 @@ export default function Home() {
                         className="border-2 border-muted-foreground/30 font-bold text-base px-8 bg-transparent"
                         asChild
                       >
-                        <Link to="/document-analyzer">Document Analyzer</Link>
+                        <Link to="/document-analyser">Document Analyzer</Link>
                       </Button>
                     </>
                   ) : (

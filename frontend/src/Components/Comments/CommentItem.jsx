@@ -5,23 +5,23 @@ import CommentForm from './CommentForm';
 
 const CommentItem = ({ comment, documentId, onCommentAdded, highlightCommentId }) => {
   const [showReplyForm, setShowReplyForm] = useState(false);
-  const commentRef = useRef(null); // Ref for this comment item
+  const commentRef = useRef(null); 
 
   useEffect(() => {
     if (highlightCommentId && comment.id === highlightCommentId && commentRef.current) {
       commentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Add a temporary highlight class
+      
       commentRef.current.classList.add('highlight-comment');
       const timer = setTimeout(() => {
         commentRef.current.classList.remove('highlight-comment');
-      }, 3000); // Remove highlight after 3 seconds
+      }, 3000); 
       return () => clearTimeout(timer);
     }
   }, [highlightCommentId, comment.id]);
 
   const handleReplyAdded = () => {
     setShowReplyForm(false);
-    onCommentAdded(); // Refresh comments after a reply is added
+    onCommentAdded(); 
   };
 
 
@@ -29,14 +29,23 @@ const CommentItem = ({ comment, documentId, onCommentAdded, highlightCommentId }
   return (
     <div
       ref={commentRef}
-      id={`comment-${comment.id}`} // Add ID for direct linking
+      id={`comment-${comment.id}`} 
       className={`mb-4 p-3 border border-border/50 rounded-lg shadow-lg shadow-primary/10 transition-all duration-300 ${
         highlightCommentId === comment.id ? 'ring-2 ring-primary ring-offset-2' : ''
       }`}
     >
       <div className="flex justify-between items-center mb-2">
         <p className="font-semibold text-foreground">{comment.user}</p>
-        <p className="text-sm text-muted-foreground">{new Date(comment.created_at).toLocaleString()}</p>
+        <p className="text-sm text-muted-foreground">
+          {new Date(comment.created_at).toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          })}
+        </p>
       </div>
       <p className="text-foreground mb-3" style={{wordBreak: 'break-word'}}>{comment.content}</p>
       <div className="flex items-center gap-3">
@@ -68,7 +77,7 @@ const CommentItem = ({ comment, documentId, onCommentAdded, highlightCommentId }
               comment={reply}
               documentId={documentId}
               onCommentAdded={onCommentAdded}
-              highlightCommentId={highlightCommentId} // Pass highlight ID to replies
+              highlightCommentId={highlightCommentId} 
             />
           ))}
         </div>
