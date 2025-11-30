@@ -21,7 +21,6 @@ class MongoEngineJWTAuthentication(JWTAuthentication):
         except DoesNotExist:
             return None
         except Exception as e:
-            # Log the exception for debugging
             print(f"Error retrieving user with ID {user_id}: {e}")
             return None
         return None

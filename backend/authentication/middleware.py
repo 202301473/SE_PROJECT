@@ -8,21 +8,20 @@ from urllib.parse import parse_qs
 @database_sync_to_async
 def get_user_from_token(token):
     try:
-        print(f"Backend: Attempting to authenticate token: {token[:30]}...") # Log token start
+        print(f"Backend: Attempting to authenticate token: {token[:30]}...") 
         access_token = AccessToken(token)
         user_id = access_token['user_id']
         
-        # Use MongoEngine query
         user = User.objects(id=user_id).first()
         
         if user:
-            print(f"Backend: Token authenticated successfully for user: {user.username}") # Log success
+            print(f"Backend: Token authenticated successfully for user: {user.username}") 
             return user
         else:
             print(f"Backend: User not found for token user_id: {user_id}")
             return AnonymousUser()
     except Exception as e:
-        print(f"Backend: Token authentication failed: {e}") # Log failure reason
+        print(f"Backend: Token authentication failed: {e}") 
         return AnonymousUser()
 
 class TokenAuthMiddleware:
@@ -34,17 +33,17 @@ class TokenAuthMiddleware:
         self.inner = inner
 
     async def __call__(self, scope, receive, send):
-        print("Backend: TokenAuthMiddleware called.") # Log middleware entry
+        print("Backend: TokenAuthMiddleware called.") 
         query_string = parse_qs(scope['query_string'].decode('utf8'))
         token = query_string.get('token', [None])[0]
 
         if token:
-            print(f"Backend: Token found in query string.") # Log token presence
+            print(f"Backend: Token found in query string.") 
             scope['user'] = await get_user_from_token(token)
         else:
-            print("Backend: No token found in query string.") # Log no token
+            print("Backend: No token found in query string.") 
             scope['user'] = AnonymousUser()
         
-        print(f"Backend: User in scope after TokenAuthMiddleware: {scope['user']}") # Log user in scope
+        print(f"Backend: User in scope after TokenAuthMiddleware: {scope['user']}") 
 
         return await self.inner(scope, receive, send)

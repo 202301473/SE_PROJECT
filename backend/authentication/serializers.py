@@ -12,7 +12,7 @@ class UserSerializer(serializers.Serializer):
     username = serializers.CharField(read_only=True)
     name = serializers.CharField(read_only=True)
     profile_picture = serializers.URLField(read_only=True)
-    cover_photo = serializers.URLField(read_only=True)  # Added cover_photo
+    cover_photo = serializers.URLField(read_only=True) 
     auth_provider = serializers.CharField(read_only=True)
     date_joined = serializers.DateTimeField(read_only=True)
     has_password = serializers.SerializerMethodField()
@@ -28,7 +28,7 @@ class UserSerializer(serializers.Serializer):
             "username": instance.username,
             "name": instance.name,
             "profile_picture": instance.profile_picture,
-            "cover_photo": instance.cover_photo,  # Added cover_photo
+            "cover_photo": instance.cover_photo,  
             "auth_provider": instance.auth_provider,
             "date_joined": instance.date_joined,
             "phone": instance.phone,
@@ -79,11 +79,9 @@ class RegisterSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError("Email address is required.")
 
-        # Basic email format validation
         if "@" not in value or "." not in value.split("@")[-1]:
             raise serializers.ValidationError("Please enter a valid email address.")
 
-        # Check if email already exists
         try:
             existing_user = User.objects(email=value).first()
             if existing_user:

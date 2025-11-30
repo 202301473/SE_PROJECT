@@ -42,7 +42,7 @@ def is_otp_valid(user, otp_code):
     if user.otp_code != otp_code:
         return False
     
-    expiration_time = user.otp_created_at + timedelta(minutes=10)
+    expiration_time = user.otp_created_at + timedelta(minutes=3)
     if datetime.now() > expiration_time:
         return False
     

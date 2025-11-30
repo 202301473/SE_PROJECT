@@ -17,7 +17,6 @@ class EmailBackend(BaseBackend):
     
     def get_user(self, user_id):
         try:
-            # Convert string ID to ObjectId for MongoDB
             return User.objects(id=user_id).first()
         except (DoesNotExist, Exception):
             return None
