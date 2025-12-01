@@ -25,7 +25,7 @@ def lawyer_list_view(request):
     """List approved lawyers with optional specialization filter and pagination"""
     specialization = request.query_params.get('specialization', '').strip()
     page = int(request.query_params.get('page', 1))
-    page_size = int(request.query_params.get('page_size', 10))
+    page_size = int(request.query_params.get('page_size', 3))
 
     profiles = LawyerProfile.objects(verification_status='approved')
     
