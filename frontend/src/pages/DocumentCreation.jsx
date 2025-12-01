@@ -32,7 +32,8 @@ import { Markdown } from 'tiptap-markdown';
 import { Indent } from '../lib/tiptap-extensions/indent';
 import TextAlign from '@tiptap/extension-text-align';
 import Image from '@tiptap/extension-image';
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import useWebSocket from '../hooks/useWebSocket';
 import ShareModal from '../Components/ShareModal';
 import CommentList from '../Components/Comments/CommentList';
 import MenuBar from '../Components/MenuBar';
@@ -78,17 +79,69 @@ const DocumentCreation = () => {
   const [documentSharedWithUsers, setDocumentSharedWithUsers] = useState([]);
 
   const documentRef = useRef(null);
-  const ws = useRef(null);
+  // const ws = useRef(null); // This was removed
   const chatContainerRef = useRef(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
+
+  const handleWsMessage = useCallback((event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === 'chat_stream') {
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.sender === 'bot') {
+          return [...prev.slice(0, -1), { ...last, text: last.text + data.chunk }];
+        }
+        return [...prev, { sender: 'bot', text: data.chunk }];
+      });
+    } else if (data.type === 'chat_complete') {
+      setIsGenerating(false);
+      if (data.updated_document_content) setFinalDocument(data.updated_document_content);
+    } else if (data.type === 'chat_error') {
+      setIsGenerating(false);
+      toast.error(`An error occurred: ${data.error}`);
+    } else if (data.type === 'document_content_change') {
+      if (data.content !== finalDocument) setFinalDocument(data.content);
+    }
+  }, [setMessages, setIsGenerating, setFinalDocument, toast]);
+
+  const handleWsError = useCallback(() => {
+    toast.error('WebSocket connection error. Please refresh the page.');
+    setIsGenerating(false);
+  }, [setIsGenerating, toast]);
+
+  const ws = useRef(null); // Re-declare ws ref here
+
+  const wsUrl = useMemo(() => {
+    if (!mongoConversationId) return null;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const accessToken = localStorage.getItem('access_token');
+    let url = `${protocol}//${window.location.hostname}:8000/ws/document/${mongoConversationId}/`;
+    if (accessToken) {
+      url += `?token=${accessToken}`;
+    }
+    return url;
+  }, [mongoConversationId]);
+
+  const { sendMessage, isConnected, wsInstance } = useWebSocket(
+    wsUrl,
+    handleWsMessage,
+    () => {}, // onOpen
+    () => {}, // onClose
+    handleWsError
+  );
+
+  // Keep component's ws.current in sync with the hook's wsInstance
+  useEffect(() => {
+    ws.current = wsInstance;
+  }, [wsInstance]);
 
   // Fullscreen handling
   const toggleFullScreen = () => {
     if (!documentRef.current) return;
     if (!document.fullscreenElement) {
-      documentRef.current.requestFullscreen().then(() => setIsFullScreen(true)).catch((err) => console.error('Fullscreen error:', err));
+      documentRef.current.requestFullscreen().then(() => setIsFullScreen(true)).catch((err) => {});
     } else {
-      document.exitFullscreen().then(() => setIsFullScreen(false)).catch((err) => console.error('Exit fullscreen error:', err));
+      document.exitFullscreen().then(() => setIsFullScreen(false)).catch((err) => {});
     }
   };
 
@@ -137,47 +190,7 @@ const DocumentCreation = () => {
     },
   });
 
-  // WebSocket connection
-  useEffect(() => {
-    if (!mongoConversationId) return;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const accessToken = localStorage.getItem('access_token');
-    let wsUrl = `${protocol}//${window.location.hostname}:8000/ws/document/${mongoConversationId}/`;
-    if (accessToken) {
-      wsUrl += `?token=${accessToken}`;
-    }
-    console.log("WebSocket connection attempt details:");
-    console.log("  URL:", wsUrl);
-    console.log("  Access Token (first 10 chars):", accessToken ? accessToken.substring(0, 10) : "N/A");
-    const newWs = new WebSocket(wsUrl);
-    ws.current = newWs;
-    newWs.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'chat_stream') {
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last && last.sender === 'bot') {
-            return [...prev.slice(0, -1), { ...last, text: last.text + data.chunk }];
-          }
-          return [...prev, { sender: 'bot', text: data.chunk }];
-        });
-      } else if (data.type === 'chat_complete') {
-        setIsGenerating(false);
-        if (data.updated_document_content) setFinalDocument(data.updated_document_content);
-      } else if (data.type === 'chat_error') {
-        setIsGenerating(false);
-        toast.error(`An error occurred: ${data.error}`);
-      } else if (data.type === 'document_content_change') {
-        if (data.content !== finalDocument) setFinalDocument(data.content);
-      }
-    };
-    newWs.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      toast.error('WebSocket connection error. Please refresh the page.');
-      setIsGenerating(false);
-    };
-    return () => newWs.close();
-  }, [mongoConversationId, editor, finalDocument]);
+
 
   // Fetch conversation / load document versions
   const fetchConversation = useCallback(async (idToFetch) => {
@@ -224,7 +237,6 @@ const DocumentCreation = () => {
         setOriginalDocumentContent('');
       }
     } catch (error) {
-      console.error('Error fetching conversation:', error);
       if (error.response && error.response.status === 404) {
         toast.error('Document not found. Redirecting to My Documents.');
         navigate('/my-documents');
@@ -275,7 +287,6 @@ const DocumentCreation = () => {
       setOriginalDocumentContent(contentToSave);
       setVersionRefreshKey(prev => prev + 1); // Trigger refresh in VersionsSidebar
     } catch (error) {
-      console.error('Error saving document:', error);
       toast.error(`Failed to save document: ${error.message}`);
     }
   }, [title, finalDocument, originalDocumentContent, mongoConversationId, messages, fetchConversation, navigate]);
@@ -305,7 +316,6 @@ const DocumentCreation = () => {
       toast.success(`Version ${versionNumber} deleted.`);
       await fetchConversation(convId);
     } catch (error) {
-      console.error('Delete version error:', error);
       toast.error(error.response?.data?.error || 'Failed to delete version.');
     }
   };
@@ -319,7 +329,6 @@ const DocumentCreation = () => {
       const { data } = await axios.get(`api/utils/conversations/${mongoConversationId}/download-latest-pdf/`, { responseType: 'blob' });
       saveAs(data, `${title || 'legal_document'}.pdf`);
     } catch (error) {
-      console.error('PDF download error:', error);
       toast.error(`Failed to download PDF: ${error.message}`);
     }
   };
@@ -338,7 +347,6 @@ const DocumentCreation = () => {
         navigate(`/document-creation/${data.conversation_id}`, { replace: true });
         setChatMessage('');
       } catch (error) {
-        console.error('Error creating conversation:', error);
         toast.error('Failed to create document.');
         setIsGenerating(false);
       }
@@ -346,10 +354,13 @@ const DocumentCreation = () => {
     }
 
     // For existing conversations, use WebSocket
-    if (!ws.current) return;
+    if (!isConnected) {
+      toast.error('WebSocket not connected. Please try again or refresh.');
+      return;
+    }
     const newMsg = { sender: 'user', text: chatMessage };
     setMessages((prev) => [...prev, newMsg]);
-    ws.current.send(JSON.stringify({ type: 'chat_message', message: chatMessage, document_content: finalDocument }));
+    sendMessage(JSON.stringify({ type: 'chat_message', message: chatMessage, document_content: finalDocument }));
     setChatMessage('');
     setIsGenerating(true);
   };
@@ -386,7 +397,7 @@ const DocumentCreation = () => {
         toast.error('Document not saved. Cannot send chat message.');
         return;
     }
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+    if (!isConnected) {
       toast.error('Chat connection not available. Document shared, but chat message could not be sent.');
       return;
     }
@@ -408,7 +419,7 @@ const DocumentCreation = () => {
       document_title: documentTitle,
     };
 
-    ws.current.send(JSON.stringify(chatPayload));
+    sendMessage(JSON.stringify(chatPayload));
     setMessages((prev) => [...prev, { sender: 'user', text: messageText, message_type: 'document', document_id: documentId, document_title: documentTitle }]);
     toast.success('Document shared and message sent to chat!');
   };

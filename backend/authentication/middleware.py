@@ -16,24 +16,19 @@ class CrossOriginOpenerPolicyMiddleware:
 
 @database_sync_to_async
 def get_user_from_token(token):
-    try:
-        print(f"Backend: Attempting to authenticate token: {token[:30]}...") # Log token start
-        access_token = AccessToken(token)
-        user_id = access_token['user_id']
-        
-        # Use MongoEngine query
-        user = User.objects(id=user_id).first()
-        
-        if user:
-            print(f"Backend: Token authenticated successfully for user: {user.username}") # Log success
-            return user
-        else:
-            print(f"Backend: User not found for token user_id: {user_id}")
-            return AnonymousUser()
-    except Exception as e:
-        print(f"Backend: Token authentication failed: {e}") # Log failure reason
-        return AnonymousUser()
-
+            try:
+                access_token = AccessToken(token)
+                user_id = access_token['user_id']
+                
+                # Use MongoEngine query
+                user = User.objects(id=user_id).first()
+                
+                if user:
+                    return user
+                else:
+                    return AnonymousUser()
+            except Exception as e:
+                return AnonymousUser()
 class TokenAuthMiddleware:
     """
     Custom middleware that takes a token from the query string and authenticates it.
