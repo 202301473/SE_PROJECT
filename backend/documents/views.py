@@ -276,6 +276,19 @@ def conversation_detail(request, pk):
         if not conversation:
             return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        # Logic to add user to shared_with_users if accessing via public link
+        if request.user.is_authenticated:
+            share_permissions = conversation.get('share_permissions')
+            shared_with_users = conversation.get('shared_with_users', [])
+            is_owner = conversation.get('owner') == request.user.username
+            is_already_shared = any(u.get('username') == request.user.username for u in shared_with_users)
+
+            if not is_owner and not is_already_shared and share_permissions and share_permissions.get('permission_level') in ['view', 'edit']:
+                # Add user to shared_with_users with the public permission level
+                update_user_share_permissions(pk, request.user.username, share_permissions.get('permission_level'))
+                # Refresh conversation to reflect changes
+                conversation = get_conversation_by_id(pk)
+
         user_has_access = False
         # 1. Check if the requesting user is the owner
         if request.user.is_authenticated and conversation.get('owner') == request.user.username:
