@@ -111,10 +111,7 @@ def connect_with_lawyer_view(request, lawyer_id):
         }, status=status.HTTP_200_OK)
 
     message = request.data.get('message', '').strip()
-    preferred_method = request.data.get('preferred_contact_method', 'email')
-    preferred_value = request.data.get('preferred_contact_value', request.user.email)
     preferred_time_str = request.data.get('preferred_time')
-    meeting_link = request.data.get('meeting_link')
 
     preferred_time = None
     if preferred_time_str:
@@ -123,24 +120,19 @@ def connect_with_lawyer_view(request, lawyer_id):
         except ValueError:
             return Response({'error': 'Invalid preferred time format. Use ISO 8601 format.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not meeting_link:
-        meeting_link = f"https://meet.google.com/new?hs=224&authuser=0&advocai={uuid4().hex[:8]}"
-
     connection_request = LawyerConnectionRequest.objects.create(
         client=request.user,
         lawyer=lawyer,
         message=message,
-        preferred_contact_method=preferred_method,
-        preferred_contact_value=preferred_value,
+        preferred_contact_method='email', # Default to email
+        preferred_contact_value=request.user.email, # Use client's email
         preferred_time=preferred_time,
-        meeting_link=meeting_link,
     )
 
     serializer = LawyerConnectionRequestSerializer(connection_request)
     return Response({
         'message': 'Connection request submitted successfully.',
         'request': serializer.data,
-        'meeting_link': meeting_link,
     }, status=status.HTTP_201_CREATED)
 
 
