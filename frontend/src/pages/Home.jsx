@@ -149,12 +149,7 @@ export default function Home() {
                     </>
                   )}
                 </div>
-                <div className="flex items-center gap-6 pt-4 text-sm">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <CheckCircle2 className="w-5 h-5 text-green-500" />
-                    <span>No card needed</span>
-                  </div>
-                </div>
+
               </div>
 
               <div className="relative">
@@ -722,10 +717,10 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="border-t border-border/50 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-              <p className="text-xs text-muted-foreground">&copy; 2025 Advoc AI. All rights reserved.</p>
+            <div className="border-t border-border/50 pt-8 flex flex-col md:flex-row items-center justify-center gap-4">
+              <p className="text-xs text-muted-foreground text-center">Empowering Justice with Artificial Intelligence.</p>
               <div className="flex items-center gap-6">
-                <span className="text-xs text-muted-foreground">Built with AI for legal professionals</span>
+    
               </div>
             </div>
           </div>

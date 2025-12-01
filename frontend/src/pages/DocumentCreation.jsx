@@ -247,20 +247,22 @@ const DocumentCreation = () => {
   }, [finalDocument, editor]);
 
   // Save conversation (create or update)
-  const handleSaveConversation = useCallback(async () => {
+  const handleSaveConversation = useCallback(async (contentOverride = null) => {
+    const contentToSave = contentOverride !== null ? contentOverride : finalDocument;
+
     if (!title.trim()) {
       toast.error('Please provide a title for the document.');
       return;
     }
-    if (finalDocument === originalDocumentContent && mongoConversationId) {
+    if (contentToSave === originalDocumentContent && mongoConversationId) {
       toast('No changes made to save.', { icon: 'ℹ️' });
       return;
     }
-    const payload = { title, messages, new_document_content: finalDocument };
+    const payload = { title, messages, new_document_content: contentToSave };
     try {
       let idToUse = mongoConversationId;
       if (!mongoConversationId) {
-        const { data } = await axios.post('/api/documents/conversations/', { title, messages, initial_document_content: finalDocument });
+        const { data } = await axios.post('/api/documents/conversations/', { title, messages, initial_document_content: contentToSave });
         idToUse = data.id;
         navigate(`/document-creation/${idToUse}`, { replace: true });
         toast.success('New Document created and saved as Version 0!');
@@ -269,7 +271,7 @@ const DocumentCreation = () => {
         toast.success('Document updated and new version saved!');
       }
       await fetchConversation(idToUse);
-      setOriginalDocumentContent(finalDocument);
+      setOriginalDocumentContent(contentToSave);
       setVersionRefreshKey(prev => prev + 1); // Trigger refresh in VersionsSidebar
     } catch (error) {
       console.error('Error saving document:', error);
@@ -740,9 +742,27 @@ const DocumentCreation = () => {
           onClose={() => setIsSignatureModalOpen(false)}
           onSignatureAdded={async (signatureMarkdown, partyName) => {
             if (editor) {
-              editor.commands.setContent(editor.getHTML() + `\n\n---\n\n${signatureMarkdown}\n\n**${partyName}**`);
-              setFinalDocument(editor.getHTML());
-              await handleSaveConversation();
+              // Parse markdown image to simple HTML
+              const urlMatch = signatureMarkdown.match(/\((.*?)\)/);
+              const imageUrl = urlMatch ? urlMatch[1] : '';
+              
+              // Properly construct HTML content
+              let signatureHtml = '';
+              if (imageUrl) {
+                signatureHtml = `
+                  <br><hr><br>
+                  <p><img src="${imageUrl}" alt="Signature for ${partyName}" style="max-height: 100px;" /></p>
+                  <p><strong>${partyName}</strong></p>
+                `;
+              } else {
+                // Fallback if markdown parsing fails
+                signatureHtml = `<p>${signatureMarkdown}</p><p><strong>${partyName}</strong></p>`;
+              }
+
+              const newContent = editor.getHTML() + signatureHtml;
+              editor.commands.setContent(newContent);
+              setFinalDocument(newContent);
+              await handleSaveConversation(newContent);
             }
           }}
         />

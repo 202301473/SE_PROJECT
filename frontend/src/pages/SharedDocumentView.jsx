@@ -326,10 +326,25 @@ const SharedDocumentView = () => {
           onClose={() => setShowSignatureModal(false)}
           onSignatureAdded={async (signatureMarkdown, partyName) => {
             if (editor) {
-              const newContentMarkdown = editor.getHTML() + `\n\n---\n\n${signatureMarkdown}\n\n**${partyName}**`;
-              const newContentHtml = convertMarkdownToHtml(newContentMarkdown);
-              editor.commands.setContent(newContentHtml);
-              setDocumentContent(newContentHtml);
+              // Parse markdown image to simple HTML
+              const urlMatch = signatureMarkdown.match(/\((.*?)\)/);
+              const imageUrl = urlMatch ? urlMatch[1] : '';
+              
+              // Properly construct HTML content
+              let signatureHtml = '';
+              if (imageUrl) {
+                signatureHtml = `
+                  <br><hr><br>
+                  <p><img src="${imageUrl}" alt="Signature for ${partyName}" style="max-height: 100px;" /></p>
+                  <p><strong>${partyName}</strong></p>
+                `;
+              } else {
+                signatureHtml = `<p>${signatureMarkdown}</p><p><strong>${partyName}</strong></p>`;
+              }
+
+              const newContent = editor.getHTML() + signatureHtml;
+              editor.commands.setContent(newContent);
+              setDocumentContent(newContent);
               // Automatically save the document after adding a signature
               await handleSave();
             }
