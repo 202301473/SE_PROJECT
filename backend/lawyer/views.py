@@ -23,9 +23,16 @@ from authentication.serializers import UserSerializer
 @permission_classes([AllowAny])
 def lawyer_list_view(request):
     """List approved lawyers with optional specialization filter and pagination"""
+    # Self-healing: Remove broken profiles
+    for p in LawyerProfile.objects():
+        try:
+            p.user
+        except DoesNotExist:
+            p.delete()
+
     specialization = request.query_params.get('specialization', '').strip()
     page = int(request.query_params.get('page', 1))
-    page_size = int(request.query_params.get('page_size', 3))
+    page_size = int(request.query_params.get('page_size', 4))
 
     profiles = LawyerProfile.objects(verification_status='approved')
     
@@ -36,7 +43,17 @@ def lawyer_list_view(request):
     skip = (page - 1) * page_size
     profiles = profiles.skip(skip).limit(page_size)
     
-    serializer = LawyerProfileSerializer(profiles, many=True)
+    valid_profiles = []
+    for profile in profiles:
+        try:
+            # Check if the referenced user exists; this triggers the DB lookup
+            if profile.user:
+                valid_profiles.append(profile)
+        except DoesNotExist:
+            # Skip profiles with missing User references
+            continue
+
+    serializer = LawyerProfileSerializer(valid_profiles, many=True)
     return Response({
         'results': serializer.data,
         'has_more': (skip + page_size) < total_count,
