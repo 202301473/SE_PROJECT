@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from mongoengine import DoesNotExist
+from mongoengine import DoesNotExist, errors
 from authentication.models import User
 from .models import LawyerProfile, LawyerConnectionRequest
 from chat.models import ChatConversation, ChatMessage
@@ -120,14 +120,24 @@ def connect_with_lawyer_view(request, lawyer_id):
         except ValueError:
             return Response({'error': 'Invalid preferred time format. Use ISO 8601 format.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    connection_request = LawyerConnectionRequest.objects.create(
-        client=request.user,
-        lawyer=lawyer,
-        message=message,
-        preferred_contact_method='email', # Default to email
-        preferred_contact_value=request.user.email, # Use client's email
-        preferred_time=preferred_time,
-    )
+    print(f"DEBUG: connect_with_lawyer_view - request.data: {request.data}")
+    print(f"DEBUG: connect_with_lawyer_view - message: '{message}', preferred_time_str: '{preferred_time_str}', preferred_time: {preferred_time}")
+    print(f"DEBUG: connect_with_lawyer_view - Using client email: {request.user.email}")
+    
+    try:
+        connection_request = LawyerConnectionRequest.objects.create(
+            client=request.user,
+            lawyer=lawyer,
+            message=message,
+            preferred_time=preferred_time,
+        )
+    except mongoengine.errors.ValidationError as ve:
+        print(f"ERROR: MongoEngine Validation Error during connection request creation: {ve.errors}")
+        return Response({'error': f"Validation error: {ve.errors}"}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({'error': f'An unexpected error occurred during connection request creation: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     serializer = LawyerConnectionRequestSerializer(connection_request)
     return Response({
