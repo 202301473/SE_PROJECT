@@ -18,32 +18,54 @@ const LawyerConnect = () => {
   const [allSpecializations, setAllSpecializations] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLawyer, setSelectedLawyer] = useState(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
-  useEffect(() => {
-    const fetchLawyers = async () => {
-      try {
-        const response = await axios.get('api/lawyer/');
-        const lawyersData = response.data || [];
-        setLawyers(lawyersData);
-        setFilteredLawyers(lawyersData);
+  const fetchLawyers = async (pageNum = 1) => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`api/lawyer/?page=${pageNum}`);
+      // Handle both old array format (fallback) and new paginated format
+      const data = response.data;
+      const newLawyers = Array.isArray(data) ? data : (data.results || []);
+      const hasMoreData = Array.isArray(data) ? false : (data.has_more || false);
+
+      if (pageNum === 1) {
+        setLawyers(newLawyers);
+        setFilteredLawyers(newLawyers);
         
+        // Extract specializations only on initial load to avoid re-processing
         const specializations = new Set();
-        lawyersData.forEach(lawyer => {
+        newLawyers.forEach(lawyer => {
           if (lawyer.specializations && Array.isArray(lawyer.specializations)) {
             lawyer.specializations.forEach(spec => specializations.add(spec));
           }
         });
         setAllSpecializations(Array.from(specializations).sort());
-      } catch (err) {
-        console.error('Failed to load lawyers:', err);
-        setError('Failed to load lawyers. Please try again later.');
-      } finally {
-        setLoading(false);
+      } else {
+        setLawyers(prev => [...prev, ...newLawyers]);
+        setFilteredLawyers(prev => [...prev, ...newLawyers]);
       }
-    };
+      
+      setHasMore(hasMoreData);
+      setPage(pageNum);
+    } catch (err) {
+      console.error('Failed to load lawyers:', err);
+      setError('Failed to load lawyers. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchLawyers();
+  useEffect(() => {
+    fetchLawyers(1);
   }, []);
+
+  const handleLoadMore = () => {
+    if (!loading && hasMore) {
+      fetchLawyers(page + 1);
+    }
+  };
 
   useEffect(() => {
     if (selectedSpecialization) {
@@ -203,15 +225,19 @@ const LawyerConnect = () => {
           ))}
         </div>
 
-        {/* Load More Section (Optional) */}
-        <div className="text-center mt-8">
-          <Button 
-            variant="outline" 
-            className="text-muted-foreground border-border hover:bg-card hover:border-primary/60 hover:text-foreground transition-all duration-200"
-          >
-            Load More Lawyers
-          </Button>
-        </div>
+        {/* Load More Section */}
+        {hasMore && (
+          <div className="text-center mt-8">
+            <Button 
+              variant="outline" 
+              onClick={handleLoadMore}
+              disabled={loading}
+              className="text-muted-foreground border-border hover:bg-card hover:border-primary/60 hover:text-foreground transition-all duration-200"
+            >
+              {loading ? 'Loading...' : 'Load More Lawyers'}
+            </Button>
+          </div>
+        )}
       </div>
       {selectedLawyer && (
         <ConnectModal

@@ -22,15 +22,27 @@ from authentication.serializers import UserSerializer
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def lawyer_list_view(request):
-    """List approved lawyers with optional specialization filter"""
+    """List approved lawyers with optional specialization filter and pagination"""
     specialization = request.query_params.get('specialization', '').strip()
+    page = int(request.query_params.get('page', 1))
+    page_size = int(request.query_params.get('page_size', 10))
+
     profiles = LawyerProfile.objects(verification_status='approved')
     
     if specialization:
         profiles = profiles.filter(specializations__icontains=specialization)
     
+    total_count = profiles.count()
+    skip = (page - 1) * page_size
+    profiles = profiles.skip(skip).limit(page_size)
+    
     serializer = LawyerProfileSerializer(profiles, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response({
+        'results': serializer.data,
+        'has_more': (skip + page_size) < total_count,
+        'total_count': total_count,
+        'page': page
+    }, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])

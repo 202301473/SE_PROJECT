@@ -13,6 +13,7 @@ import random
 import cloudinary
 import cloudinary.uploader
 import requests as http_requests
+import traceback
 
 from .serializers import (
     RegisterSerializer,
@@ -37,6 +38,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from .otp_utils import create_and_send_otp, is_otp_valid, clear_otp
+from utils.mongo_utils import ensure_mongo_connection
 
 
 def get_tokens_for_user(user):
@@ -289,6 +291,7 @@ def login_view(request):
 def google_auth_view(request):
     """Authenticate user with Google OAuth"""
     print("Google auth view started...")
+    ensure_mongo_connection()
     try:
         # Validate request data
         if not request.data or not request.data.get("token"):
@@ -459,7 +462,6 @@ def google_auth_view(request):
         )
     except Exception as e:
         print(f"An unexpected error occurred in google_auth_view: {str(e)}")
-        import traceback
         traceback.print_exc()
         return Response(
             {

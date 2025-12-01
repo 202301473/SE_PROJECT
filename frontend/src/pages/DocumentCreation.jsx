@@ -248,7 +248,8 @@ const DocumentCreation = () => {
 
   // Save conversation (create or update)
   const handleSaveConversation = useCallback(async (contentOverride = null) => {
-    const contentToSave = contentOverride !== null ? contentOverride : finalDocument;
+    // Ensure contentOverride is a string (the HTML content) and not an Event object
+    const contentToSave = (contentOverride && typeof contentOverride === 'string') ? contentOverride : finalDocument;
 
     if (!title.trim()) {
       toast.error('Please provide a title for the document.');

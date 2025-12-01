@@ -23,6 +23,7 @@ load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
 
 # MongoDB MUST be configured BEFORE anything else to prevent lazy connections
 import mongoengine
+import certifi
 MONGO_URI = os.getenv("MONGO_URI")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "legal_document_navigator_db")
 
@@ -44,7 +45,8 @@ try:
         serverSelectionTimeoutMS=5000,
         connectTimeoutMS=10000,
         socketTimeoutMS=10000,
-        uuidRepresentation='standard'
+        uuidRepresentation='standard',
+        tlsCAFile=certifi.where()
     )
     print(f"✅ MongoDB connected successfully: {MONGO_DB_NAME}")
 except Exception as e:

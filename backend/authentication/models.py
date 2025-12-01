@@ -44,6 +44,7 @@ class User(Document):
     
     meta = {
         'collection': 'users',
+        'db_alias': 'default',
         'indexes': [
             'email',
             'username',
@@ -152,6 +153,7 @@ class LawyerProfile(Document):
 
     meta = {
         'collection': 'lawyer_profiles',
+        'db_alias': 'default',
         'indexes': [
             'verification_status',
             {'fields': ['user'], 'unique': True},
@@ -183,6 +185,7 @@ class LawyerConnectionRequest(Document):
 
     meta = {
         'collection': 'lawyer_connection_requests',
+        'db_alias': 'default',
         'indexes': [
             {'fields': ['client', 'lawyer', 'status']},
             'lawyer',
