@@ -57,10 +57,12 @@ const LawyerProfile = () => {
     }
 
     try {
-      const response = await axios.post(`api/lawyer/${profileData.user.id}/connect/`, {
+      const payload = {
         message: message || "",
         preferred_time: preferredTimeIso,
-      });
+      };
+      console.log("DEBUG: Sending connection request payload:", payload); // New debug log
+      const response = await axios.post(`api/lawyer/${profileData.user.id}/connect/`, payload);
       if (response.data.message) {
         toast.success(response.data.message);
       } else {
