@@ -1,8 +1,17 @@
+import re
 from rest_framework import serializers
 from .models import User
 from lawyer.models import LawyerProfile
 from django.contrib.auth.password_validation import validate_password
 
+def validate_phone_number_start(value):
+    """
+    Validates that a mobile number starts with 6, 7, 8, or 9.
+    """
+    if value and not re.match(r"^[6789]\d{9}$", value):
+        raise serializers.ValidationError(
+            "Mobile number must start with 6, 7, 8, or 9 and be 10 digits long."
+        )
 
 class UserSerializer(serializers.Serializer):
     """Serializer for User MongoEngine Document"""
@@ -53,7 +62,9 @@ class RegisterSerializer(serializers.Serializer):
     role = serializers.ChoiceField(
         choices=[("client", "Client"), ("lawyer", "Lawyer")], default="client"
     )
-    phone = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    phone = serializers.CharField(
+        required=False, allow_blank=True, max_length=20, validators=[validate_phone_number_start]
+    )
     license_number = serializers.CharField(
         required=False, allow_blank=True, max_length=120
     )
@@ -365,7 +376,7 @@ class LawyerProfileSerializer(serializers.Serializer):
 
     id = serializers.CharField(read_only=True)
     user = UserSerializer(read_only=True)
-    phone = serializers.CharField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True, validators=[validate_phone_number_start])
     education = serializers.CharField(required=False, allow_blank=True)
     experience_years = serializers.IntegerField(required=False, min_value=0)
     law_firm = serializers.CharField(required=False, allow_blank=True)
