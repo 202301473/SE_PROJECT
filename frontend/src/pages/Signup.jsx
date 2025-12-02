@@ -82,6 +82,7 @@ const { setUser, setIsAuthenticated } = useAuth();
     password2: '',
     phone: '',
     license_number: '',
+    bar_council_id: '',
     education: '',
     experience_years: '',
     law_firm: '',
@@ -252,6 +253,10 @@ const { setUser, setIsAuthenticated } = useAuth();
         if (!/^[a-zA-Z\s&'-]+$/.test(formData.law_firm.trim())) {
           newErrors.law_firm = 'Law firm name can only contain letters, spaces, ampersands, apostrophes, and hyphens';
         }
+      }
+      // Bar Council ID required for lawyers
+      if (!formData.bar_council_id || !formData.bar_council_id.trim()) {
+        newErrors.bar_council_id = 'Bar Council ID is required';
       }
     }
 
@@ -775,6 +780,24 @@ const { setUser, setIsAuthenticated } = useAuth();
                                 <p className="text-xs text-red-600 dark:text-red-400">{errors.license_number}</p>
                               </div>
                             )}
+                            {/* Bar Council ID input (required by backend for lawyer signup) */}
+                            <div className="space-y-2 mt-3">
+                              <Label htmlFor="bar_council_id" className="text-foreground font-medium">Bar Council ID *</Label>
+                              <Input
+                                id="bar_council_id"
+                                name="bar_council_id"
+                                placeholder="Bar Council Registration ID"
+                                value={formData.bar_council_id}
+                                onChange={handleInputChange}
+                                disabled={loading}
+                                className={`bg-input border-border/50 text-foreground placeholder-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-300 ${errors.bar_council_id ? 'border-red-500' : ''}`}
+                              />
+                              {errors.bar_council_id && (
+                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mt-1">
+                                  <p className="text-xs text-red-600 dark:text-red-400">{errors.bar_council_id}</p>
+                                </div>
+                              )}
+                            </div>
                           </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
