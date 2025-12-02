@@ -19,8 +19,8 @@ from .comment_mongo_client import get_comments_for_document, add_comment, serial
 @api_view(['POST'])
 def create_conversation_with_chat(request):
     """
-    Creates a new conversation based on an initial chat message and generates
-    the first version of the document using AI.
+    Creates a new conversation based on an initial chat message.
+    The AI response for the first message will be handled by the WebSocket.
     """
     message = request.data.get('message')
     initial_document_content = request.data.get('document_content', '') # Can be empty for initial creation
@@ -29,43 +29,23 @@ def create_conversation_with_chat(request):
         return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        # Generate AI response for the initial message
-        ai_raw_response = get_gemini_response(message, initial_document_content)
-        
-        # Parse the AI response to extract document content
-        ai_response_content = ""
-        if '```json' in ai_raw_response:
-            json_str = ai_raw_response.split('```json')[1].split('```')[0]
-            document_data = json.loads(json_str)
-            ai_response_content = document_data.get('text', '')
-        else:
-            ai_response_content = ai_raw_response # If not JSON, treat raw response as content
-
-        # Determine a title for the new document (can be improved)
+        # Determine a title for the new document
         title = message[:50] + "..." if len(message) > 50 else message
         if not title:
             title = "New Document"
 
-        # Prepare messages for saving
-        messages = [
-            {'sender': 'user', 'text': message},
-            {'sender': 'bot', 'text': ai_raw_response} # Save raw AI response to messages
-        ]
-
-        # Save the new conversation
+        # Save the new conversation with only the user's initial message
         conversation_id = save_conversation(
             title=title,
-            messages=messages,
-            initial_document_content=ai_response_content, # AI's parsed response is the initial document content
+            messages=[{'sender': 'user', 'text': message}], # Only save user's message initially
+            initial_document_content=initial_document_content,
             uploaded_by=(request.user.username if request.user.is_authenticated else 'anonymous'),
-            notes='Initial document generation via chat'
+            notes='Initial document creation via chat (waiting for AI stream)'
         )
 
         if conversation_id:
             return Response({
                 'conversation_id': conversation_id,
-                'response': ai_raw_response,
-                'updated_document_content': ai_response_content,
                 'title': title
             }, status=status.HTTP_201_CREATED)
         else:

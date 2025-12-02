@@ -93,10 +93,13 @@ const DocumentCreation = () => {
         }
         return [...prev, { sender: 'bot', text: data.chunk }];
       });
-    } else if (data.type === 'chat_complete') {
+    }
+    else if (data.type === 'chat_complete') {
+      console.log("Frontend: Received chat_complete message.");
       setIsGenerating(false);
       if (data.updated_document_content) setFinalDocument(data.updated_document_content);
     } else if (data.type === 'chat_error') {
+      console.log("Frontend: Received chat_error message.");
       setIsGenerating(false);
       toast.error(`An error occurred: ${data.error}`);
     } else if (data.type === 'document_content_change') {
@@ -342,10 +345,30 @@ const DocumentCreation = () => {
       try {
         const { data } = await axios.post('/api/documents/conversations/chat/', {
           message: chatMessage,
-          document_content: finalDocument,
+          document_content: finalDocument, // document_content will be empty string here
         });
-        navigate(`/document-creation/${data.conversation_id}`, { replace: true });
+        const newConversationId = data.conversation_id;
+        navigate(`/document-creation/${newConversationId}`, { replace: true });
         setChatMessage('');
+
+        // Wait for WebSocket to connect with the new conversation ID
+        let attempts = 0;
+        const maxAttempts = 10;
+        while (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+          if (attempts >= maxAttempts) {
+            toast.error('Failed to establish WebSocket connection for initial message.');
+            setIsGenerating(false);
+            return;
+          }
+          await new Promise(resolve => setTimeout(resolve, 500));
+          attempts++;
+        }
+
+        // Now send the original message over the newly established WebSocket to trigger AI
+        // The display of the user's message will be handled by fetchConversation once the
+        // WebSocket stream comes back with the updated messages.
+        sendMessage(JSON.stringify({ type: 'chat_message', message: chatMessage, document_content: finalDocument }));
+
       } catch (error) {
         toast.error('Failed to create document.');
         setIsGenerating(false);

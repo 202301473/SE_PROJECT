@@ -88,6 +88,7 @@ class DocumentConsumer(AsyncWebsocketConsumer):
             await self.save_conversation_update(user_message, full_ai_response, ai_response_content)
 
             # 4. Send completion message
+            print(f"Consumer: Sending chat_complete for document {self.document_id}")
             await self.send(text_data=json.dumps({
                 'type': 'chat_complete',
                 'full_response': full_ai_response,
@@ -95,6 +96,7 @@ class DocumentConsumer(AsyncWebsocketConsumer):
             }))
 
         except Exception as e:
+            print(f"Consumer: Sending chat_error for document {self.document_id} with error: {e}")
             await self.send(text_data=json.dumps({
                 'type': 'chat_error',
                 'error': str(e)
