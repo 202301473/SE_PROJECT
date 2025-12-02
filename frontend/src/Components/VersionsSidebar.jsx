@@ -12,8 +12,12 @@ const VersionsSidebar = ({ conversationId, onSelectVersion, onClose, currentVers
   const [documentTitle, setDocumentTitle] = useState('Document');
 
   const fetchDocumentVersions = useCallback(async () => {
-    if (!conversationId) return;
-    setLoading(true);
+    // Ensure conversationId is a non-empty string before proceeding
+    if (!conversationId || typeof conversationId !== 'string' || conversationId === 'undefined') {
+      setVersions([]); // Clear versions if no valid ID
+      setLoading(false);
+      return;
+    }
     try {
       const response = await axios.get(`/api/documents/conversations/${conversationId}/`);
       setDocumentTitle(response.data.title || 'Document');

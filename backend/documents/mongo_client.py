@@ -54,7 +54,14 @@ def get_all_conversations(user=None):
 
 def get_conversation_by_id(conversation_id):
     """Fetches a single conversation by its ID."""
+    if not conversation_id:
+        return None
     try:
+        # Validate if the conversation_id is a valid ObjectId string before conversion
+        if not ObjectId.is_valid(conversation_id):
+            print(f"Error fetching conversation by ID: '{conversation_id}' is not a valid ObjectId string.")
+            return None
+        
         conversation = conversations_collection.find_one({'_id': ObjectId(conversation_id)})
         if conversation:
             conversation['id'] = str(conversation['_id']) # Map _id to id
@@ -103,7 +110,7 @@ def save_conversation(title, messages, initial_document_content=None, uploaded_b
             print(f"[DEBUG] Initial version (0) content length: {len(document_versions[0]['content'])}")
         return str(result.inserted_id)
     except Exception as e:
-        print(f"Error saving conversation: {e}")
+        print(f"Error saving conversation: {e}. Returning None.")
         return None
 
 def update_conversation(conversation_id, title, messages, new_document_content=None, uploaded_by=None, notes=None, shared_with_users=None):

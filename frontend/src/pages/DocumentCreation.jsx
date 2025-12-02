@@ -16,6 +16,7 @@ import {
   History,
   Menu,
   X,
+  XCircle,
 } from 'lucide-react';
 import axios from '../api/axios';
 import { saveAs } from 'file-saver';
@@ -95,11 +96,9 @@ const DocumentCreation = () => {
       });
     }
     else if (data.type === 'chat_complete') {
-      console.log("Frontend: Received chat_complete message.");
       setIsGenerating(false);
       if (data.updated_document_content) setFinalDocument(data.updated_document_content);
     } else if (data.type === 'chat_error') {
-      console.log("Frontend: Received chat_error message.");
       setIsGenerating(false);
       toast.error(`An error occurred: ${data.error}`);
     } else if (data.type === 'document_content_change') {
@@ -115,7 +114,7 @@ const DocumentCreation = () => {
   const ws = useRef(null); // Re-declare ws ref here
 
   const wsUrl = useMemo(() => {
-    if (!mongoConversationId) return null;
+    if (!mongoConversationId || mongoConversationId === 'undefined') return null;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const accessToken = localStorage.getItem('access_token');
     let url = `${protocol}//${window.location.hostname}:8000/ws/document/${mongoConversationId}/`;
@@ -197,7 +196,7 @@ const DocumentCreation = () => {
 
   // Fetch conversation / load document versions
   const fetchConversation = useCallback(async (idToFetch) => {
-    if (!idToFetch) {
+    if (!idToFetch || idToFetch === 'undefined') { // Updated guard
       setTitle('');
       setMessages([]);
       setFinalDocument('');
@@ -251,7 +250,9 @@ const DocumentCreation = () => {
 
   // Load on mount / id change
   useEffect(() => {
-    fetchConversation(mongoConversationId);
+    if (mongoConversationId && mongoConversationId !== 'undefined') { // Only fetch if mongoConversationId is present and not the string "undefined"
+      fetchConversation(mongoConversationId);
+    }
   }, [mongoConversationId, versionToLoad, fetchConversation]);
 
   // Keep editor content in sync when finalDocument changes (e.g., version load)
@@ -348,6 +349,7 @@ const DocumentCreation = () => {
           document_content: finalDocument, // document_content will be empty string here
         });
         const newConversationId = data.conversation_id;
+        console.log('DEBUG: newConversationId from API:', newConversationId);
         navigate(`/document-creation/${newConversationId}`, { replace: true });
         setChatMessage('');
 
@@ -759,8 +761,8 @@ const DocumentCreation = () => {
       </div>
 
       {/* Right Sidebar - Comments */}
-      <div className="bg-card border-l border-border/10 flex flex-col overflow-hidden h-full">
-        {commentsSidebarOpen && mongoConversationId && (
+      {commentsSidebarOpen && mongoConversationId && (
+        <div className="bg-card border-l border-border/10 flex flex-col overflow-hidden h-full">
           <div className="flex flex-col h-full">
             <div className="p-4 border-b border-border/10 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -775,33 +777,35 @@ const DocumentCreation = () => {
               <CommentList documentId={mongoConversationId} />
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Right Sidebar - Versions */}
-      <div
-        className={`
-          ${isVersionsSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
-          w-3/4 max-w-xs md:w-64 lg:w-80
-          transition-all duration-300 ease-in-out
-          fixed top-0 bottom-0 right-0 z-[51]
-          bg-card border-l border-border/10
-          flex flex-col overflow-hidden h-full
-        `}
-        style={{ height: 'calc(100vh - var(--navbar-height))', top: 'var(--navbar-height)' }}
-      >
-        <VersionsSidebar
-          conversationId={mongoConversationId}
-          onSelectVersion={handleSelectVersion}
-          onClose={() => setIsVersionsSidebarOpen(false)}
-          currentVersion={currentVersion}
-          onDeleteVersion={handleDeleteVersion}
-          versionRefreshKey={versionRefreshKey} // New prop
-        />
-      </div>
+      {mongoConversationId && (
+        <div
+          className={`
+            ${isVersionsSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
+            w-3/4 max-w-xs md:w-64 lg:w-80
+            transition-all duration-300 ease-in-out
+            fixed top-0 bottom-0 right-0 z-[51]
+            bg-card border-l border-border/10
+            flex flex-col overflow-hidden h-full
+          `}
+          style={{ height: 'calc(100vh - var(--navbar-height))', top: 'var(--navbar-height)' }}
+        >
+          <VersionsSidebar
+            conversationId={mongoConversationId}
+            onSelectVersion={handleSelectVersion}
+            onClose={() => setIsVersionsSidebarOpen(false)}
+            currentVersion={currentVersion}
+            onDeleteVersion={handleDeleteVersion}
+            versionRefreshKey={versionRefreshKey} // New prop
+          />
+        </div>
+      )}
 
       {/* Modals */}
-      {isShareModalOpen && (
+      {isShareModalOpen && mongoConversationId && (
         <ShareModal
           documentId={mongoConversationId}
           documentTitle={title}
@@ -810,7 +814,7 @@ const DocumentCreation = () => {
           onDocumentShared={handleDocumentSharedToChat}
         />
       )}
-      {isSignatureModalOpen && (
+      {isSignatureModalOpen && mongoConversationId && (
         <SignatureModal
           onClose={() => setIsSignatureModalOpen(false)}
           onSignatureAdded={async (signatureMarkdown, partyName) => {

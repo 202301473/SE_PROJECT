@@ -145,7 +145,7 @@ const MyDocuments = () => {
 
       {isShareModalOpen && selectedDoc && (
         <ShareModal
-          documentId={selectedDoc._id}
+          documentId={selectedDoc.id}
           documentTitle={selectedDoc.title}
           initialSharedWithUsers={selectedDoc.shared_with_users || []}
           onClose={() => setIsShareModalOpen(false)}
@@ -236,7 +236,7 @@ const MyDocuments = () => {
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {filteredMyDocuments.map((doc) => (
-                  <Card key={doc._id} className="group bg-card/40 backdrop-blur-md border-border/50 hover:border-primary/50 shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 flex flex-col overflow-hidden rounded-2xl">
+                  <Card key={doc.id} className="group bg-card/40 backdrop-blur-md border-border/50 hover:border-primary/50 shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 flex flex-col overflow-hidden rounded-2xl">
                     <CardHeader className="pb-4 relative">
                       <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button size="icon" variant="ghost" onClick={() => handleShareDocument(doc)} className="h-8 w-8 text-muted-foreground hover:text-primary">
@@ -246,16 +246,16 @@ const MyDocuments = () => {
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                         <FileText className="w-6 h-6 text-primary" />
                       </div>
-                      {editingDocId === doc._id ? (
+                      {editingDocId === doc.id ? (
                         <div className="flex items-center gap-2">
                           <Input
                             value={newTitle}
                             onChange={(e) => setNewTitle(e.target.value)}
                             className="h-8 text-lg font-bold bg-background/50"
                             autoFocus
-                            onKeyPress={(e) => e.key === 'Enter' && handleSaveTitle(doc._id)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleSaveTitle(doc.id)}
                           />
-                          <Button size="icon" variant="ghost" onClick={() => handleSaveTitle(doc._id)} className="h-8 w-8 text-green-500">
+                          <Button size="icon" variant="ghost" onClick={() => handleSaveTitle(doc.id)} className="h-8 w-8 text-green-500">
                             <Save className="w-4 h-4" />
                           </Button>
                           <Button size="icon" variant="ghost" onClick={handleCancelEdit} className="h-8 w-8 text-muted-foreground">
@@ -270,7 +270,7 @@ const MyDocuments = () => {
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => handleEditClick(doc._id, doc.title)}
+                            onClick={() => handleEditClick(doc.id, doc.title)}
                             className="h-6 w-6 opacity-0 group-hover/title:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
                           >
                             <Edit className="w-3 h-3" />
@@ -284,7 +284,7 @@ const MyDocuments = () => {
 
                     <div className="mt-auto p-6 pt-0 flex gap-3">
                       <Button
-                        onClick={() => handleViewDocument(doc._id)}
+                        onClick={() => handleViewDocument(doc.id)}
                         className="flex-1 bg-primary/10 text-primary transition-colors font-medium"
                       >
                         Open
@@ -292,7 +292,7 @@ const MyDocuments = () => {
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => handleDownloadPdf(doc._id, doc.title)}
+                        onClick={() => handleDownloadPdf(doc.id, doc.title)}
                         className="border-border/50 hover:border-primary/50 hover:bg-primary/5"
                         title="Download PDF"
                       >
@@ -301,7 +301,7 @@ const MyDocuments = () => {
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => handleDeleteDocument(doc._id)}
+                        onClick={() => handleDeleteDocument(doc.id)}
                         className="border-border/50 hover:border-destructive/50 hover:bg-destructive/5 text-muted-foreground hover:text-destructive"
                         title="Delete"
                       >
@@ -355,7 +355,7 @@ const MyDocuments = () => {
 
                     <div className="mt-auto p-6 pt-0 flex gap-3">
                       <Button
-                        onClick={() => navigate(`/documentShare/${doc._id}`)}
+                        onClick={() => navigate(`/documentShare/${doc.id}`)}
                         className="flex-1 bg-secondary/10 text-secondary transition-colors font-medium"
                       >
                         View Shared
@@ -363,7 +363,7 @@ const MyDocuments = () => {
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => handleDownloadPdf(doc._id, doc.title)}
+                        onClick={() => handleDownloadPdf(doc.id, doc.title)}
                         className="border-border/50 hover:border-secondary/50 hover:bg-secondary/5"
                         title="Download PDF"
                       >
